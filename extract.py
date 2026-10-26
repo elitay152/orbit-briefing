@@ -5,7 +5,8 @@ import requests
 
 # Constants
 TS_FORMAT = "%Y%m%dT%H%M%SZ"
-RAW_DATA_DIR = Path(__file__).parent / "data" / "raw"
+DATA_DIR = Path(__file__).parent / "data"
+RAW_DATA_DIR = DATA_DIR / "raw"
 MAX_AGE = timedelta(hours=2)  
 GROUP_LIST = ['kuiper', 'starlink']  # Define the list of groups to fetch
 

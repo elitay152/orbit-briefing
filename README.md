@@ -6,7 +6,7 @@ with ElevenLabs.
 
 ## Status
 - [x] Extract: fetch orbit data, save timestamped raw snapshots, skip if cache is fresh
-- [ ] Validate + load into DuckDB (idempotent)
+- [x] Validate + load into DuckDB (idempotent)
 - [ ] Compute passes over a location (skyfield)
 - [ ] Spoken briefing (ElevenLabs)
 
