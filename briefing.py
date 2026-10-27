@@ -67,11 +67,20 @@ def synthesize_pyttsx3(text: str, base_path: Path) -> Path:
     engine.runAndWait()
     return out_path
 
-def synthesize(text: str) -> Path:
-    """Write the briefing audio using the configured TTS backend."""
+def save_transcript(text: str, base_path: Path) -> Path:
+    """Write the briefing text next to the audio; returns the .txt path."""
+    transcript_path = base_path.with_suffix(".txt")
+    transcript_path.write_text(text, encoding="utf-8")
+    return transcript_path
+
+def save_briefing(text: str) -> Path:
+    """Save the transcript and audio for a briefing; returns the audio path."""
     
     BRIEFINGS_DIR.mkdir(parents=True, exist_ok=True)
     base_path = BRIEFINGS_DIR / datetime.now(timezone.utc).strftime(TS_FORMAT)
+
+    transcript_path = save_transcript(text, base_path)
+    logger.info("Transcript saved to %s", transcript_path)
 
     if TTS_BACKEND == "pyttsx3":
         return synthesize_pyttsx3(text, base_path)
@@ -89,5 +98,5 @@ if __name__ == "__main__":
 
     script = build_script(peaks_by_group, LOCATION_NAME)
     print(script)
-    audio_path = synthesize(script)
+    audio_path = save_briefing(script)
     logger.info("Briefing saved to %s (%d characters, backend=%s)", audio_path, len(script), TTS_BACKEND)
