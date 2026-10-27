@@ -3,13 +3,7 @@ import json
 from pathlib import Path
 import requests
 
-# Constants
-TS_FORMAT = "%Y%m%dT%H%M%SZ"
-DATA_DIR = Path(__file__).parent / "data"
-RAW_DATA_DIR = DATA_DIR / "raw"
-DB_PATH = DATA_DIR / "orbit.duckdb"
-MAX_AGE = timedelta(hours=2)  
-GROUP_LIST = ['kuiper', 'starlink']  # Define the list of groups to fetch
+from config import RAW_DATA_DIR, GROUP_LIST, MAX_AGE, TS_FORMAT
 
 def fetch_group(group: str) -> list[dict]:
     """
