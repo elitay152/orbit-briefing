@@ -9,7 +9,12 @@ from extract import latest_raw, GROUP_LIST, DATA_DIR
 
 # constants
 DB_PATH = DATA_DIR / "orbit.duckdb"
-REQUIRED_FIELDS = ['NORAD_CAT_ID', 'OBJECT_NAME', 'EPOCH', 'MEAN_MOTION', 'INCLINATION', 'ECCENTRICITY', 'RA_OF_ASC_NODE', 'ARG_OF_PERICENTER', 'MEAN_ANOMALY', 'BSTAR']
+REQUIRED_FIELDS = ['NORAD_CAT_ID', 'OBJECT_NAME', 'OBJECT_ID', 'EPOCH', 
+                   'MEAN_MOTION', 'INCLINATION', 'ECCENTRICITY', 
+                   'RA_OF_ASC_NODE', 'ARG_OF_PERICENTER', 'MEAN_ANOMALY', 
+                   'BSTAR', 'MEAN_MOTION_DOT', 'MEAN_MOTION_DDOT',
+                   'CLASSIFICATION_TYPE', 'EPHEMERIS_TYPE', 'ELEMENT_SET_NO',
+                   'REV_AT_EPOCH']
 logger = logging.getLogger(__name__)
 
 def read_raw(path: Path) -> list[dict]:
@@ -71,6 +76,7 @@ def create_table(con: duckdb.DuckDBPyConnection) -> None:
     con.execute("""CREATE TABLE IF NOT EXISTS orbital_elements (
         norad_cat_id INTEGER, 
         object_name VARCHAR, 
+        object_id VARCHAR,
         epoch TIMESTAMPTZ, 
         mean_motion DOUBLE, 
         inclination DOUBLE, 
@@ -78,7 +84,13 @@ def create_table(con: duckdb.DuckDBPyConnection) -> None:
         ra_of_asc_node DOUBLE, 
         arg_of_pericenter DOUBLE, 
         mean_anomaly DOUBLE, 
+        mean_motion_dot DOUBLE, 
+        mean_motion_ddot DOUBLE,
         bstar DOUBLE, 
+        classification_type VARCHAR,
+        ephemeris_type INTEGER,
+        element_set_no INTEGER,
+        rev_at_epoch INTEGER,
         constellation VARCHAR,
         source_file VARCHAR, 
         loaded_at TIMESTAMPTZ DEFAULT current_timestamp,
@@ -103,11 +115,17 @@ def load_records(con: duckdb.DuckDBPyConnection,
     # Insert records into the database
     prior_count = con.execute("SELECT COUNT(*) FROM orbital_elements").fetchone()[0]
     con.execute("""INSERT OR IGNORE INTO orbital_elements (
-            norad_cat_id, object_name, epoch, mean_motion, inclination, eccentricity, 
-            ra_of_asc_node, arg_of_pericenter, mean_anomaly, bstar, constellation, source_file
+            norad_cat_id, object_name, object_id, epoch, mean_motion, inclination, eccentricity, 
+            ra_of_asc_node, arg_of_pericenter, mean_anomaly, bstar, 
+            mean_motion_dot, mean_motion_ddot, classification_type, ephemeris_type,
+            element_set_no, rev_at_epoch,
+            constellation, source_file
         ) SELECT
-            norad_cat_id, object_name, epoch, mean_motion, inclination, eccentricity,
-            ra_of_asc_node, arg_of_pericenter, mean_anomaly, bstar, constellation, source_file
+            norad_cat_id, object_name, object_id, epoch, mean_motion, inclination, eccentricity,
+            ra_of_asc_node, arg_of_pericenter, mean_anomaly, bstar, mean_motion_dot, 
+            mean_motion_ddot, classification_type, ephemeris_type,
+            element_set_no, rev_at_epoch,
+            constellation, source_file
         FROM records_df""")
     new_count = con.execute("SELECT COUNT(*) FROM orbital_elements").fetchone()[0]
 
