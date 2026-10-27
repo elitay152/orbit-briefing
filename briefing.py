@@ -1,16 +1,20 @@
 import logging
 from skyfield.api import load, wgs84
 import duckdb
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
+import pyttsx3
 
 from transform import compute_peaks
-from config import LAT, LON, LOCATION_NAME, DB_PATH
+from config import setup_logging, LAT, LON, LOCATION_NAME, DB_PATH, TS_FORMAT, BRIEFINGS_DIR, TTS_BACKEND
 
 # constants
 DIRECTIONS = ["north", "northeast", "east", "southeast", "south",
             "southwest", "west", "northwest"]
 DISPLAY_NAMES = {'kuiper': 'Amazon Leo',
                  'starlink': 'Starlink'}
+
+logger = logging.getLogger(__name__)
 
 def compass(azimuth: float) -> str:
     """
@@ -29,17 +33,16 @@ def spoken_name(name: str) -> str:
     """Format satellite names for speech."""
     try:
         prefix, number = name.split("-", 1) # split at the first dash
-    except:
+        return f"{prefix.title()} {int(number)}"
+    except ValueError:
         return name
 
-    return f"{prefix.title()} {int(number)}"
-
-def build_script(peaks_by_group: dict, LOCATION_NAME: str) -> str:
+def build_script(peaks_by_group: dict, location: str) -> str:
     """Develops a briefing script from the peaks data for each group."""
 
     script = []
 
-    greeting = f"Here's your satellite pass briefing for {LOCATION_NAME} for the next hour."
+    greeting = f"Here's your satellite pass briefing for {location} for the next hour."
     script.append(greeting)
 
     for group, peaks in peaks_by_group.items():
@@ -56,11 +59,27 @@ def build_script(peaks_by_group: dict, LOCATION_NAME: str) -> str:
 
     return "\n".join(script)
 
+def synthesize_pyttsx3(text: str, base_path: Path) -> Path:
+    """Speak text with the offline system voice; returns the .wav path."""
+    out_path = base_path.with_suffix(".wav")
+    engine = pyttsx3.init()
+    engine.save_to_file(text, str(out_path))
+    engine.runAndWait()
+    return out_path
+
+def synthesize(text: str) -> Path:
+    """Write the briefing audio using the configured TTS backend."""
+    
+    BRIEFINGS_DIR.mkdir(parents=True, exist_ok=True)
+    base_path = BRIEFINGS_DIR / datetime.now(timezone.utc).strftime(TS_FORMAT)
+
+    if TTS_BACKEND == "pyttsx3":
+        return synthesize_pyttsx3(text, base_path)
+    else:
+        raise ValueError(f"Unknown TTS_BACKEND: {TTS_BACKEND}.")
+
 if __name__ == "__main__":
-    logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        )
+    setup_logging()
 
     with duckdb.connect(str(DB_PATH), read_only=True) as con:
         ts = load.timescale()
@@ -68,4 +87,7 @@ if __name__ == "__main__":
         t0 = ts.now()
         peaks_by_group = compute_peaks(con, ts, observer, t0, t0 + 1/24)
 
-        print(build_script(peaks_by_group, LOCATION_NAME))
+    script = build_script(peaks_by_group, LOCATION_NAME)
+    print(script)
+    audio_path = synthesize(script)
+    logger.info("Briefing saved to %s (%d characters, backend=%s)", audio_path, len(script), TTS_BACKEND)

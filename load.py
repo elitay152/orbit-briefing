@@ -6,7 +6,7 @@ import duckdb
 import pandas as pd
 
 from extract import latest_raw
-from config import GROUP_LIST, DB_PATH
+from config import setup_logging, GROUP_LIST, DB_PATH
 
 # constants
 REQUIRED_FIELDS = ['NORAD_CAT_ID', 'OBJECT_NAME', 'OBJECT_ID', 'EPOCH', 
@@ -134,10 +134,7 @@ def load_records(con: duckdb.DuckDBPyConnection,
 
 if __name__ == "__main__":
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
+    setup_logging()
 
     with duckdb.connect(str(DB_PATH)) as con:
         create_table(con)

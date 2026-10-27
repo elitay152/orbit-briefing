@@ -4,7 +4,7 @@ from skyfield.api import load, EarthSatellite, wgs84
 import time
 import logging
 
-from config import GROUP_LIST, LAT, LON, LOCATION_NAME, MIN_ALTITUDE_DEG, DB_PATH
+from config import setup_logging, GROUP_LIST, LAT, LON, LOCATION_NAME, MIN_ALTITUDE_DEG, DB_PATH
 
 LATEST_SQL = """
 SELECT * FROM orbital_elements
@@ -86,10 +86,7 @@ def compute_peaks(con: duckdb.DuckDBPyConnection,
 
 if __name__ == "__main__":
 
-    logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        )
+    setup_logging()
 
     # connect to database and find peaks for each group
     with duckdb.connect(str(DB_PATH), read_only=True) as con:

@@ -2,8 +2,11 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import requests
+import logging
 
-from config import RAW_DATA_DIR, GROUP_LIST, MAX_AGE, TS_FORMAT
+from config import setup_logging, RAW_DATA_DIR, GROUP_LIST, MAX_AGE, TS_FORMAT
+
+logger = logging.getLogger(__name__)
 
 def fetch_group(group: str) -> list[dict]:
     """
@@ -88,13 +91,16 @@ def is_fresh(path: Path, max_age: timedelta) -> bool:
 
 if __name__ == "__main__":
 
+    setup_logging()
+
     for group in GROUP_LIST:
+        logger.info("%s: fetching from CelesTrak", group)
         latest = latest_raw(group)
         if latest is None or not is_fresh(latest, MAX_AGE):
             records = fetch_group(group)
             file_path = save_raw(group, records)
-            print(f"Saved {len(records)} records for group '{group}' to JSON file at {file_path}.")
+            logger.info("%s: saved %d records to %s", group, len(records), file_path)
         else:
             age = file_age(latest)
             minutes = int(age.total_seconds() // 60)
-            print(f"Skipping fetch for group '{group}' as the latest file is fresh ({minutes} minutes old).")
+            logger.info("%s: cache is fresh (%d min old), skipping fetch", group, minutes)
