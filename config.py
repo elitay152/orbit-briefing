@@ -2,6 +2,7 @@
 from datetime import timedelta
 from pathlib import Path
 import os
+import logging
 
 from dotenv import load_dotenv
 
@@ -22,3 +23,12 @@ LAT = float(os.environ["LAT"])
 LON = float(os.environ["LON"])
 LOCATION_NAME = os.environ["LOCATION_NAME"]
 MIN_ALTITUDE_DEG = 10.0
+
+# TTS
+TTS_BACKEND = os.environ.get("TTS_BACKEND", "pyttsx3")
+BRIEFINGS_DIR = DATA_DIR / "briefings"
+
+# functions
+def setup_logging(level=logging.INFO):
+    logging.basicConfig(level=level, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.getLogger("comtypes").setLevel(logging.WARNING)
