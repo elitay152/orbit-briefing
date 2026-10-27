@@ -3,18 +3,8 @@ from datetime import timezone
 from skyfield.api import load, EarthSatellite, wgs84
 import time
 import logging
-import os
-from dotenv import load_dotenv
 
-from extract import GROUP_LIST
-from load import DB_PATH
-
-# constants
-load_dotenv() # load environment variables
-LAT = float(os.environ["LAT"])
-LON = float(os.environ["LON"])
-LOCATION_NAME = os.environ["LOCATION_NAME"]
-MIN_ALTITUDE_DEG = 10
+from config import GROUP_LIST, LAT, LON, LOCATION_NAME, MIN_ALTITUDE_DEG, DB_PATH
 
 LATEST_SQL = """
 SELECT * FROM orbital_elements
@@ -69,6 +59,31 @@ def find_peaks(sat, observer, t0, t1) -> list[dict]:
 
     return peaks
 
+def compute_peaks(con: duckdb.DuckDBPyConnection,
+                    ts, observer, t0, t1) -> dict[str, list[dict]]:
+    """Return each group's peaks over the observer between t0 and t1, sorted by time."""
+    peaks_by_group = {}
+    
+    for group in GROUP_LIST:
+        start = time.perf_counter()  # start the timer for this group
+
+        elements = latest_elements(con, group)
+        sats = [EarthSatellite.from_omm(ts, to_omm(e)) for e in elements]
+
+        peaks = []
+        for i, sat in enumerate(sats):
+            if i and i % 1000 == 0:
+                logger.debug("%s: %d/%d satellites checked", group, i, len(sats))
+            peaks.extend(find_peaks(sat, observer, t0, t1))
+
+        peaks.sort(key=lambda p: p["time"])
+        peaks_by_group[group] = peaks
+        elapsed = time.perf_counter() - start
+        logger.info("%s: %d peaks from %d satellites in %.1fs",
+                    group, len(peaks), len(sats), elapsed)
+        
+    return peaks_by_group
+
 if __name__ == "__main__":
 
     logging.basicConfig(
@@ -77,36 +92,16 @@ if __name__ == "__main__":
         )
 
     # connect to database and find peaks for each group
-        # connect to database and find peaks for each group
     with duckdb.connect(str(DB_PATH), read_only=True) as con:
         ts = load.timescale()
         observer = wgs84.latlon(LAT, LON)
         t0 = ts.now()
         t1 = t0 + 1/24  # 1 hour later
 
-        peaks_by_group = {}
-
-        for group in GROUP_LIST:
-            start = time.perf_counter()  # start the timer for this group
-
-            elements = latest_elements(con, group)
-            sats = [EarthSatellite.from_omm(ts, to_omm(e)) for e in elements]
-
-            peaks = []
-            for i, sat in enumerate(sats):
-                if i and i % 1000 == 0:
-                    logger.debug("%s: %d/%d satellites checked", group, i, len(sats))
-                peaks.extend(find_peaks(sat, observer, t0, t1))
-
-            peaks.sort(key=lambda p: p["time"])
-            peaks_by_group[group] = peaks
-
-            elapsed = time.perf_counter() - start
-            logger.info("%s: %d peaks from %d satellites in %.1fs",
-                        group, len(peaks), len(sats), elapsed)
-
+        peaks_by_group = compute_peaks(con, ts, observer, t0, t1)
+        # debug preview of peaks for each group
         for group, peaks in peaks_by_group.items():
-            logger.debug("Next %s peaks over Redmond:", group)
+            logger.debug("Next %s peaks over %s:", group, LOCATION_NAME)
             for p in peaks[:5]:
                 logger.debug("%s UTC  %s  %.0f° alt, %.0f° az, %.0f km",
                              f"{p['time']:%H:%M}", p["name"],

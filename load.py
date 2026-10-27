@@ -5,10 +5,10 @@ import logging
 import duckdb
 import pandas as pd
 
-from extract import latest_raw, GROUP_LIST, DATA_DIR
+from extract import latest_raw
+from config import GROUP_LIST, DB_PATH
 
 # constants
-DB_PATH = DATA_DIR / "orbit.duckdb"
 REQUIRED_FIELDS = ['NORAD_CAT_ID', 'OBJECT_NAME', 'OBJECT_ID', 'EPOCH', 
                    'MEAN_MOTION', 'INCLINATION', 'ECCENTRICITY', 
                    'RA_OF_ASC_NODE', 'ARG_OF_PERICENTER', 'MEAN_ANOMALY', 
