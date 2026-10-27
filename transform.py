@@ -1,11 +1,21 @@
 import duckdb
 from datetime import timezone
-from skyfield.api import load, EarthSatellite
+from skyfield.api import load, EarthSatellite, wgs84
+import time
+import logging
+import os
+from dotenv import load_dotenv
 
 from extract import GROUP_LIST
 from load import DB_PATH
 
 # constants
+load_dotenv() # load environment variables
+LAT = float(os.environ["LAT"])
+LON = float(os.environ["LON"])
+LOCATION_NAME = os.environ["LOCATION_NAME"]
+MIN_ALTITUDE_DEG = 10
+
 LATEST_SQL = """
 SELECT * FROM orbital_elements
 WHERE constellation = ?
@@ -19,6 +29,8 @@ OMM_FIELDS = [
     "BSTAR", "MEAN_MOTION_DOT", "MEAN_MOTION_DDOT", "CLASSIFICATION_TYPE",
     "EPHEMERIS_TYPE", "ELEMENT_SET_NO", "REV_AT_EPOCH",
 ]
+
+logger = logging.getLogger(__name__)
 
 def latest_elements(con: duckdb.DuckDBPyConnection,
                     constellation: str) -> list[dict]:
@@ -34,16 +46,68 @@ def to_omm(row: dict) -> dict:
     omm_dict["EPOCH"] = omm_dict["EPOCH"].astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")
     return omm_dict
 
+def find_peaks(sat, observer, t0, t1) -> list[dict]:
+    """Find the peaks of visibility for a satellite between two times."""
+    
+    # find rise/peak/set events above the minimum altitude
+    times, events = sat.find_events(observer, t0, t1, altitude_degrees=MIN_ALTITUDE_DEG)
+
+    peaks = []
+    for t, event in zip(times, events):
+        if event != 1:
+            continue  # keep only peaks (event == 1)
+
+        alt, az, distance = (sat - observer).at(t).altaz()
+        peaks.append({
+            "name": sat.name,
+            "norad_id": sat.model.satnum,
+            "time": t.utc_datetime(),
+            "altitude": alt.degrees,
+            "azimuth": az.degrees,
+            "distance_km": distance.km
+        })
+
+    return peaks
 
 if __name__ == "__main__":
 
+    logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        )
+
+    # connect to database and find peaks for each group
+        # connect to database and find peaks for each group
     with duckdb.connect(str(DB_PATH), read_only=True) as con:
         ts = load.timescale()
-        
-        for group in GROUP_LIST:
-            elements = latest_elements(con, group)
-            omm_elements = [to_omm(element) for element in elements]
-            print(group, len(omm_elements))
+        observer = wgs84.latlon(LAT, LON)
+        t0 = ts.now()
+        t1 = t0 + 1/24  # 1 hour later
 
-            sat = EarthSatellite.from_omm(ts, omm_elements[0])
-            print(sat)
+        peaks_by_group = {}
+
+        for group in GROUP_LIST:
+            start = time.perf_counter()  # start the timer for this group
+
+            elements = latest_elements(con, group)
+            sats = [EarthSatellite.from_omm(ts, to_omm(e)) for e in elements]
+
+            peaks = []
+            for i, sat in enumerate(sats):
+                if i and i % 1000 == 0:
+                    logger.debug("%s: %d/%d satellites checked", group, i, len(sats))
+                peaks.extend(find_peaks(sat, observer, t0, t1))
+
+            peaks.sort(key=lambda p: p["time"])
+            peaks_by_group[group] = peaks
+
+            elapsed = time.perf_counter() - start
+            logger.info("%s: %d peaks from %d satellites in %.1fs",
+                        group, len(peaks), len(sats), elapsed)
+
+        for group, peaks in peaks_by_group.items():
+            logger.debug("Next %s peaks over Redmond:", group)
+            for p in peaks[:5]:
+                logger.debug("%s UTC  %s  %.0f° alt, %.0f° az, %.0f km",
+                             f"{p['time']:%H:%M}", p["name"],
+                             p["altitude"], p["azimuth"], p["distance_km"])
