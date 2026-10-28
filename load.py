@@ -6,7 +6,7 @@ import duckdb
 import pandas as pd
 
 from extract import latest_raw
-from config import setup_logging, GROUP_LIST, DB_PATH
+from config import setup_logging, GROUP_LIST, DB_PATH, LAKE_DIR
 
 # constants
 REQUIRED_FIELDS = ['NORAD_CAT_ID', 'OBJECT_NAME', 'OBJECT_ID', 'EPOCH', 
@@ -15,6 +15,11 @@ REQUIRED_FIELDS = ['NORAD_CAT_ID', 'OBJECT_NAME', 'OBJECT_ID', 'EPOCH',
                    'BSTAR', 'MEAN_MOTION_DOT', 'MEAN_MOTION_DDOT',
                    'CLASSIFICATION_TYPE', 'EPHEMERIS_TYPE', 'ELEMENT_SET_NO',
                    'REV_AT_EPOCH']
+LAKE_COLUMNS = ["norad_cat_id", "object_name", "object_id", "epoch", "mean_motion",
+                "inclination", "eccentricity", "ra_of_asc_node", "arg_of_pericenter",
+                "mean_anomaly", "bstar", "mean_motion_dot", "mean_motion_ddot",
+                "classification_type", "ephemeris_type", "element_set_no",
+                "rev_at_epoch", "source_file",]
 logger = logging.getLogger(__name__)
 
 def read_raw(path: Path) -> list[dict]:
@@ -96,15 +101,8 @@ def create_table(con: duckdb.DuckDBPyConnection) -> None:
         loaded_at TIMESTAMPTZ DEFAULT current_timestamp,
         PRIMARY KEY (norad_cat_id, epoch))""")
 
-def load_records(con: duckdb.DuckDBPyConnection, 
-                 records: list[dict], 
-                 constellation: str, 
-                 source_file: str) -> int:
-    """Load valid records into the DuckDB database.
-    Returns the number of records inserted."""
-
-    if not records:
-        return 0  # No records to insert
+def to_dataframe(records: list[dict], constellation: str, source_file: str) -> pd.DataFrame:
+    """Lowercase columns, add lineage columns, parse epoch as UTC."""
 
     records_df = pd.DataFrame(records)
     records_df.columns = [col.lower() for col in records_df.columns]  # Convert column names to lowercase   
@@ -112,21 +110,26 @@ def load_records(con: duckdb.DuckDBPyConnection,
     records_df["source_file"] = source_file
     records_df["epoch"] = pd.to_datetime(records_df["epoch"], utc=True)  # Ensure epoch is in UTC
 
-    # Insert records into the database
+    return records_df
+
+def write_parquet(con: duckdb.DuckDBPyConnection, df: pd.DataFrame,
+                  constellation: str, snapshot: str) -> Path:
+    """Write one snapshot to the lake; same snapshot → same file (idempotent)."""
+
+    folder = LAKE_DIR / f"constellation={constellation}"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"snapshot={snapshot}.parquet"
+    con.execute(f"COPY (SELECT {', '.join(LAKE_COLUMNS)} FROM df) "
+                f"TO '{path.as_posix()}' (FORMAT parquet)")
+
+    return path
+
+def load_records(con: duckdb.DuckDBPyConnection, df: pd.DataFrame) -> int:
+    """Insert a snapshot's rows into orbital_elements; returns the number of new rows."""
+    cols = ", ".join(LAKE_COLUMNS + ["constellation"])
+
     prior_count = con.execute("SELECT COUNT(*) FROM orbital_elements").fetchone()[0]
-    con.execute("""INSERT OR IGNORE INTO orbital_elements (
-            norad_cat_id, object_name, object_id, epoch, mean_motion, inclination, eccentricity, 
-            ra_of_asc_node, arg_of_pericenter, mean_anomaly, bstar, 
-            mean_motion_dot, mean_motion_ddot, classification_type, ephemeris_type,
-            element_set_no, rev_at_epoch,
-            constellation, source_file
-        ) SELECT
-            norad_cat_id, object_name, object_id, epoch, mean_motion, inclination, eccentricity,
-            ra_of_asc_node, arg_of_pericenter, mean_anomaly, bstar, mean_motion_dot, 
-            mean_motion_ddot, classification_type, ephemeris_type,
-            element_set_no, rev_at_epoch,
-            constellation, source_file
-        FROM records_df""")
+    con.execute(f"INSERT OR IGNORE INTO orbital_elements ({cols}) SELECT {cols} FROM df")
     new_count = con.execute("SELECT COUNT(*) FROM orbital_elements").fetchone()[0]
 
     return new_count - prior_count
@@ -144,9 +147,20 @@ if __name__ == "__main__":
             if latest_file is None:
                 logger.warning("No raw data found for group %s", group)
                 continue
+
             raw_data = read_raw(latest_file)
             logger.info("Loaded %d records from %s", len(raw_data), group)
             logger.debug("First record: %s", json.dumps(raw_data[0], indent=2))
+            
             valid_records, invalid_records = validate(raw_data)
-            inserted = load_records(con, valid_records, group, latest_file.name)
-            logger.info("%s: %d valid, %d rejected, %d inserted", group, len(valid_records), len(invalid_records), inserted)    
+            if not valid_records:
+                logger.warning("%s: no valid records, skipping", group)
+                continue
+
+            df = to_dataframe(valid_records, group, latest_file.name)
+            parquet_path = write_parquet(con, df, group, latest_file.stem)
+            inserted = load_records(con, df)
+            logger.info("%s: %d valid, %d rejected, %d inserted, wrote %s",
+                        group, len(valid_records),
+                        len(invalid_records), inserted, parquet_path.name)
+            
