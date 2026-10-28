@@ -3,6 +3,7 @@ from datetime import timedelta
 from pathlib import Path
 import os
 import logging
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
@@ -24,6 +25,7 @@ LAT = float(os.environ["LAT"])
 LON = float(os.environ["LON"])
 LOCATION_NAME = os.environ["LOCATION_NAME"]
 MIN_ALTITUDE_DEG = 10.0
+TIMEZONE = ZoneInfo(os.environ.get("TIMEZONE", "UTC"))
 
 # TTS
 TTS_BACKEND = os.environ.get("TTS_BACKEND", "pyttsx3")
