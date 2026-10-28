@@ -1,0 +1,20 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      LOCATION_NAME: Seattle
+      LAT: "47.6205"
+      LON: "-122.3493"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.4"
+      - run: pip install -r requirements.txt
+      - run: pytest
