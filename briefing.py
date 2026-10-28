@@ -90,7 +90,7 @@ def save_briefing(text: str) -> Path:
 if __name__ == "__main__":
     setup_logging()
 
-    with duckdb.connect(str(DB_PATH), read_only=True) as con:
+    with duckdb.connect() as con:
         ts = load.timescale()
         observer = wgs84.latlon(LAT, LON)
         t0 = ts.now()

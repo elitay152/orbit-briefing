@@ -1,7 +1,7 @@
 import duckdb
 import pytest
 
-from load import create_table, load_records, validate_record
+from load import validate_record, to_dataframe, write_parquet
 
 @pytest.fixture
 def valid_record():
@@ -47,15 +47,18 @@ def test_missing_field_is_reported(valid_record):
 @pytest.fixture
 def con():
     connection = duckdb.connect(":memory:")
-    create_table(connection)
     yield connection
     connection.close()
 
-def test_load_is_idempotent(con, valid_record):
-    first = load_records(con, [valid_record], "kuiper", "test.json")
-    second = load_records(con, [valid_record], "kuiper", "test.json")
-    count = con.execute("SELECT count(*) FROM orbital_elements").fetchone()[0]
+def test_write_parquet_is_idempotent(con, valid_record, tmp_path, monkeypatch):
+    monkeypatch.setattr("load.LAKE_DIR", tmp_path)
+    df = to_dataframe([valid_record], "kuiper", "test.json")
 
-    assert first == 1
-    assert second == 0
-    assert count == 1
+    first = write_parquet(con, df, "kuiper", "20261028T000000Z")
+    second = write_parquet(con, df, "kuiper", "20261028T000000Z")
+
+    assert first == second                               # same snapshot → same file
+    assert len(list(tmp_path.rglob("*.parquet"))) == 1   # overwritten, not duplicated
+    
+    rows = con.execute(f"SELECT norad_cat_id FROM read_parquet('{first.as_posix()}')").fetchall()
+    assert rows == [(63720,)]

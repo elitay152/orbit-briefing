@@ -12,6 +12,7 @@ load_dotenv()
 DATA_DIR = Path(__file__).parent / "data"
 RAW_DATA_DIR = DATA_DIR / "raw"
 DB_PATH = DATA_DIR / "orbit.duckdb"
+LAKE_DIR = DATA_DIR / "lake" / "orbital_elements"
 
 # Extract
 GROUP_LIST = ["kuiper", "starlink"]

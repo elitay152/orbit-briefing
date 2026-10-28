@@ -4,13 +4,17 @@ from skyfield.api import load, EarthSatellite, wgs84
 import time
 import logging
 
-from config import setup_logging, GROUP_LIST, LAT, LON, LOCATION_NAME, MIN_ALTITUDE_DEG, DB_PATH
+from config import setup_logging, GROUP_LIST, LAT, LON, LOCATION_NAME, MIN_ALTITUDE_DEG, DB_PATH, LAKE_DIR
 
-LATEST_SQL = """
-SELECT * FROM orbital_elements
+LAKE_GLOB = (LAKE_DIR / "*" / "*.parquet").as_posix()
+
+LATEST_SQL = f"""
+SELECT * FROM read_parquet('{LAKE_GLOB}', hive_partitioning = true)
 WHERE constellation = ?
-QUALIFY ROW_NUMBER() OVER(PARTITION BY norad_cat_id
-ORDER BY epoch DESC) = 1
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY norad_cat_id
+    ORDER BY epoch DESC, source_file DESC
+) = 1
 """
 
 OMM_FIELDS = [
@@ -89,7 +93,7 @@ if __name__ == "__main__":
     setup_logging()
 
     # connect to database and find peaks for each group
-    with duckdb.connect(str(DB_PATH), read_only=True) as con:
+    with duckdb.connect() as con:
         ts = load.timescale()
         observer = wgs84.latlon(LAT, LON)
         t0 = ts.now()
