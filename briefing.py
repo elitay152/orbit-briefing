@@ -6,7 +6,7 @@ from pathlib import Path
 import pyttsx3
 
 from transform import compute_peaks
-from config import setup_logging, LAT, LON, LOCATION_NAME, DB_PATH, TS_FORMAT, BRIEFINGS_DIR, TTS_BACKEND
+from config import setup_logging, LAT, LON, LOCATION_NAME, TS_FORMAT, BRIEFINGS_DIR, TTS_BACKEND, TIMEZONE
 
 # constants
 DIRECTIONS = ["north", "northeast", "east", "southeast", "south",
@@ -25,9 +25,10 @@ def compass(azimuth: float) -> str:
     index = round(azimuth / degrees) % len(DIRECTIONS)
     return DIRECTIONS[index]
 
-def spoken_time(dt: datetime) -> str:
-    """Format a datetime for speech, e.g. '7:26 PM UTC'."""
-    return dt.strftime("%I:%M %p").lstrip("0") + " UTC"
+def spoken_time(dt: datetime, tz:timezone) -> str:
+    """Format a datetime for speech, e.g. '7:26 PM UTC'. Converts to local timezone."""
+    local = dt.astimezone(tz)
+    return local.strftime("%I:%M %p %Z").lstrip("0")
 
 def spoken_name(name: str) -> str:
     """Format satellite names for speech."""
@@ -54,7 +55,7 @@ def build_script(peaks_by_group: dict, location: str) -> str:
 
         script.append(f"{DISPLAY_NAMES.get(group, group)} satellites make {len(peaks):,} passes in the next hour.")
         script.append(f"The highest is {spoken_name(highest['name'])}, reaching {highest['altitude']:.0f} degrees "
-                      f"in the {compass(highest['azimuth'])} at {spoken_time(highest['time'])}, about "
+                      f"in the {compass(highest['azimuth'])} at {spoken_time(highest['time'], TIMEZONE)}, about "
                       f"{highest['distance_km']:,.0f} kilometers away.")
 
     return "\n".join(script)
