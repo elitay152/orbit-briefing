@@ -1,0 +1,46 @@
+name: daily-snapshot
+
+on:
+  schedule:
+    - cron: "17 6 * * *"     # every day at 06:17 UTC
+  workflow_dispatch:          # adds a "Run workflow" button for manual runs
+
+permissions:
+  contents: write             # lets the job push to the data branch
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    env:
+      LOCATION_NAME: Seattle
+      LAT: "47.6205"
+      LON: "-122.3493"
+      LAKE_DIR: ${{ github.workspace }}/lake-store/orbital_elements
+    steps:
+      - uses: actions/checkout@v4          # your code (main)
+
+      - uses: actions/checkout@v4          # the data branch, into ./lake-store
+        with:
+          ref: data
+          path: lake-store
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+      - run: python extract.py
+      - run: python load.py
+
+      - name: Commit new snapshots
+        working-directory: lake-store
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No new snapshots"
+          else
+            git commit -m "Snapshot $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push
+          fi
