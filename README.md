@@ -18,7 +18,6 @@ A sample briefing generated for Seattle on 28 October 2026:
 - [x] Compute passes over a location (DuckDB over Parquet, skyfield)
 - [x] Spoken briefing: script + transcript + audio via pluggable TTS (offline `pyttsx3` default)
 - [x] Tests (pytest) running in CI on GitHub Actions
-- [ ] Historical backfill from Space-Track
 - [ ] Scheduled daily runs
 - [ ] Local time zone in the briefing
 
