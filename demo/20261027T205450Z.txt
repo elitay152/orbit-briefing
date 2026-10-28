@@ -1,5 +1,0 @@
-Here's your satellite pass briefing for Seattle for the next hour.
-Amazon Leo satellites make 104 passes in the next hour.
-The highest is Kuiper 246, reaching 89 degrees in the northeast at 9:53 PM UTC, about 634 kilometers away.
-Starlink satellites make 2,025 passes in the next hour.
-The highest is Starlink 34236, reaching 90 degrees in the northwest at 9:18 PM UTC, about 467 kilometers away.
