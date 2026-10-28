@@ -76,31 +76,6 @@ def validate(records: list[dict]) -> tuple[list[dict], list[dict]]:
 
     return valid_records, invalid_records
 
-def create_table(con: duckdb.DuckDBPyConnection) -> None:
-    """Create the orbital_elements table in the DuckDB database if it doesn't exist."""
-    con.execute("""CREATE TABLE IF NOT EXISTS orbital_elements (
-        norad_cat_id INTEGER, 
-        object_name VARCHAR, 
-        object_id VARCHAR,
-        epoch TIMESTAMPTZ, 
-        mean_motion DOUBLE, 
-        inclination DOUBLE, 
-        eccentricity DOUBLE, 
-        ra_of_asc_node DOUBLE, 
-        arg_of_pericenter DOUBLE, 
-        mean_anomaly DOUBLE, 
-        mean_motion_dot DOUBLE, 
-        mean_motion_ddot DOUBLE,
-        bstar DOUBLE, 
-        classification_type VARCHAR,
-        ephemeris_type INTEGER,
-        element_set_no INTEGER,
-        rev_at_epoch INTEGER,
-        constellation VARCHAR,
-        source_file VARCHAR, 
-        loaded_at TIMESTAMPTZ DEFAULT current_timestamp,
-        PRIMARY KEY (norad_cat_id, epoch))""")
-
 def to_dataframe(records: list[dict], constellation: str, source_file: str) -> pd.DataFrame:
     """Lowercase columns, add lineage columns, parse epoch as UTC."""
 
@@ -124,23 +99,11 @@ def write_parquet(con: duckdb.DuckDBPyConnection, df: pd.DataFrame,
 
     return path
 
-def load_records(con: duckdb.DuckDBPyConnection, df: pd.DataFrame) -> int:
-    """Insert a snapshot's rows into orbital_elements; returns the number of new rows."""
-    cols = ", ".join(LAKE_COLUMNS + ["constellation"])
-
-    prior_count = con.execute("SELECT COUNT(*) FROM orbital_elements").fetchone()[0]
-    con.execute(f"INSERT OR IGNORE INTO orbital_elements ({cols}) SELECT {cols} FROM df")
-    new_count = con.execute("SELECT COUNT(*) FROM orbital_elements").fetchone()[0]
-
-    return new_count - prior_count
-
-
 if __name__ == "__main__":
 
     setup_logging()
 
-    with duckdb.connect(str(DB_PATH)) as con:
-        create_table(con)
+    with duckdb.connect() as con:
         for group in GROUP_LIST:
             latest_file = latest_raw(group)
     
@@ -159,8 +122,7 @@ if __name__ == "__main__":
 
             df = to_dataframe(valid_records, group, latest_file.name)
             parquet_path = write_parquet(con, df, group, latest_file.stem)
-            inserted = load_records(con, df)
-            logger.info("%s: %d valid, %d rejected, %d inserted, wrote %s",
+            logger.info("%s: %d valid, %d rejected, wrote %s",
                         group, len(valid_records),
-                        len(invalid_records), inserted, parquet_path.name)
+                        len(invalid_records), parquet_path.name)
             
