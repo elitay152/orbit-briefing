@@ -1,11 +1,12 @@
 # orbit-briefing
 
-A small data pipeline that tracks satellite constellations (Amazon Leo, Starlink)
-using public orbit data from CelesTrak, and will generate a spoken pass briefing
-with ElevenLabs.
+A small end-to-end data pipeline that tracks satellite constellations (Amazon Leo and Starlink)
+using public orbit data from CelesTrak. It saves timestamped raw snapshots, validates and loads
+them into DuckDB, computes which satellites pass over a location in the next hour, and turns the
+results into a short spoken briefing (offline text-to-speech, with a pluggable engine).
 
 ## Sample output
-A sample briefing generated for Seattle on 27 October 2026:
+A sample briefing generated for Seattle on 28 October 2026:
 🔊 [Audio](demo/sample_briefing.wav) · 📄 [Transcript](demo/sample_briefing.txt)
 
 ## Status
@@ -13,7 +14,6 @@ A sample briefing generated for Seattle on 27 October 2026:
 - [x] Validate + load into DuckDB (logged rejections, idempotent inserts)
 - [x] Compute passes over a location (skyfield, newest orbit per satellite)
 - [x] Spoken briefing: script + transcript + audio via pluggable TTS (offline `pyttsx3` default)
-- [ ] ElevenLabs TTS backend (`TTS_BACKEND=elevenlabs`)
 - [ ] Local time zone in the briefing
 - [ ] Scheduling (run the pipeline automatically)
 - [ ] Tests for validation and speech formatting helpers
@@ -32,7 +32,7 @@ orbit-briefing/
 │   ├── raw/           #   timestamped JSON snapshots per constellation
 │   ├── orbit.duckdb   #   orbital_elements table
 │   └── briefings/     #   transcripts + audio from each run
-├── .env.example       # required settings (location, API key)
+├── .env.example       # required settings (location, TTS backend)
 └── requirements.txt
 ```
 
