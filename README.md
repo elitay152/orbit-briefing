@@ -12,6 +12,24 @@ pluggable engine).
 A sample briefing generated for Seattle on 28 October 2026:
 🔊 [Audio](demo/sample_briefing.wav) · 📄 [Transcript](demo/sample_briefing.txt)
 
+## Prediction error: how fast do orbit predictions go stale?
+
+![Prediction error vs. age](demo/prediction_error.png)
+
+For each satellite, every older orbit record is propagated (SGP4) to the epoch of the next
+record and compared with that record's position.
+
+- **Typical error is ~7–10 km** for records up to a day apart, similar for Amazon Leo and Starlink,
+  and grows with age (Starlink median: 6.7 → 9.7 → 12.6 km at ~0, 1, 2 days).
+- **The tail is long:** mean error is 2–4× the median, driven by satellites that maneuvered.
+  Altitude changes of only 10–27 km produced position errors of thousands of kilometers, because
+  a small change in orbital period accumulates as along-track drift.
+- **Flagging** pairs above 10× their age-bucket median and labeling by altitude change finds
+  337 raising / 175 lowering maneuvers in Starlink and 5 / 6 in Amazon Leo over the first few days of data.
+- Vertical bands in the Starlink cloud reflect the **batch cadence** of orbit-data updates.
+
+*Based on a few days of snapshots; the daily job keeps extending the history.*
+
 ## Status
 - [x] Extract: fetch orbit data, save timestamped raw snapshots, skip if cache is fresh
 - [x] Validate + write a partitioned Parquet lake (logged rejections, idempotent writes)
@@ -20,6 +38,7 @@ A sample briefing generated for Seattle on 28 October 2026:
 - [x] Tests (pytest) running in CI on GitHub Actions
 - [x] Scheduled daily runs
 - [x] Local time zone in the briefing
+- [x] Add orbit prediction error
 
 ## Run
 ```bash
