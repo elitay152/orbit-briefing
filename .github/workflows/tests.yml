@@ -7,6 +7,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       LOCATION_NAME: Seattle
       LAT: "47.6205"
@@ -15,6 +16,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11.4"
+          python-version: "3.11"
+          cache: pip
       - run: pip install -r requirements.txt
-      - run: pytest
+      - run: pytest -v

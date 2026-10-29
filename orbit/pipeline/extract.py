@@ -4,7 +4,7 @@ from pathlib import Path
 import requests
 import logging
 
-from config import setup_logging, RAW_DATA_DIR, GROUP_LIST, MAX_AGE, TS_FORMAT
+from orbit.config import setup_logging, RAW_DATA_DIR, GROUP_LIST, MAX_AGE, TS_FORMAT
 
 logger = logging.getLogger(__name__)
 
