@@ -1,7 +1,7 @@
 import pytest
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
-from briefing import compass, spoken_name, spoken_time
+from orbit.briefing import compass, spoken_name, spoken_time
 
 LA = ZoneInfo("America/Los_Angeles")
 UTC = ZoneInfo("UTC")

@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 from skyfield.api import load, EarthSatellite, Timescale
 
-from transform import to_omm
-from config import setup_logging, LAKE_GLOB, GROUP_LIST, ANALYSIS_DIR, DISPLAY_NAMES
+from orbit.pipeline.transform import to_omm
+from orbit.config import setup_logging, LAKE_GLOB, GROUP_LIST, ANALYSIS_DIR, DISPLAY_NAMES
 
 # constants
 EARTH_MU = 398600.4418       # Earth's gravitational constant, km³/s²

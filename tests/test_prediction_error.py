@@ -2,7 +2,7 @@ import pytest
 from datetime import datetime, timedelta, timezone
 from skyfield.api import load
 
-from prediction_error import altitude_km, classify, prediction_errors
+from orbit.analysis.prediction_error import altitude_km, classify, prediction_errors
 
 def test_altitude_geostationary():
     assert altitude_km(1.00273791) == pytest.approx(35786, abs=5)

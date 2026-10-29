@@ -1,29 +1,7 @@
 import duckdb
 import pytest
 
-from load import validate_record, to_dataframe, write_parquet
-
-@pytest.fixture
-def valid_record():
-    return {
-        "OBJECT_NAME": "KUIPER-00028",
-        "OBJECT_ID": "2025-088A",
-        "NORAD_CAT_ID": 63720,
-        "EPOCH": "2026-10-25T08:14:22.123456",
-        "MEAN_MOTION": 15.04,
-        "ECCENTRICITY": 0.0001,
-        "INCLINATION": 51.9,
-        "RA_OF_ASC_NODE": 120.5,
-        "ARG_OF_PERICENTER": 90.1,
-        "MEAN_ANOMALY": 270.0,
-        "BSTAR": 0.0001,
-        "MEAN_MOTION_DOT": 0.00001,
-        "MEAN_MOTION_DDOT": 0.0,
-        "CLASSIFICATION_TYPE": "U",
-        "EPHEMERIS_TYPE": 0,
-        "ELEMENT_SET_NO": 999,
-        "REV_AT_EPOCH": 1234,
-    }
+from orbit.pipeline.load import validate_record, to_dataframe, write_parquet
 
 def test_valid_record_has_no_issues(valid_record):
     assert validate_record(valid_record) == []
@@ -51,7 +29,7 @@ def con():
     connection.close()
 
 def test_write_parquet_is_idempotent(con, valid_record, tmp_path, monkeypatch):
-    monkeypatch.setattr("load.LAKE_DIR", tmp_path)
+    monkeypatch.setattr("orbit.pipeline.load.LAKE_DIR", tmp_path)
     df = to_dataframe([valid_record], "kuiper", "test.json")
 
     first = write_parquet(con, df, "kuiper", "20261028T000000Z")

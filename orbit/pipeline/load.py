@@ -5,8 +5,8 @@ import logging
 import duckdb
 import pandas as pd
 
-from extract import latest_raw
-from config import setup_logging, GROUP_LIST, DB_PATH, LAKE_DIR
+from orbit.pipeline.extract import latest_raw
+from orbit.config import setup_logging, GROUP_LIST, LAKE_DIR
 
 # constants
 REQUIRED_FIELDS = ['NORAD_CAT_ID', 'OBJECT_NAME', 'OBJECT_ID', 'EPOCH', 

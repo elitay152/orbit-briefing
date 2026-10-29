@@ -4,7 +4,7 @@ from skyfield.api import load, EarthSatellite, wgs84
 import time
 import logging
 
-from config import setup_logging, GROUP_LIST, LAT, LON, LOCATION_NAME, MIN_ALTITUDE_DEG, LAKE_GLOB, LAKE_DIR
+from orbit.config import setup_logging, GROUP_LIST, LAT, LON, LOCATION_NAME, MIN_ALTITUDE_DEG, LAKE_GLOB, LAKE_DIR
 
 LATEST_SQL = f"""
 SELECT * FROM read_parquet('{LAKE_GLOB}', hive_partitioning = true)

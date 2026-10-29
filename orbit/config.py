@@ -10,9 +10,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Paths
-DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 RAW_DATA_DIR = DATA_DIR / "raw"
-DB_PATH = DATA_DIR / "orbit.duckdb"
 LAKE_DIR = Path(os.environ.get("LAKE_DIR", DATA_DIR / "lake" / "orbital_elements"))
 LAKE_GLOB = (LAKE_DIR / "*" / "*.parquet").as_posix()
 ANALYSIS_DIR = DATA_DIR / "analysis"
@@ -35,7 +34,11 @@ BRIEFINGS_DIR = DATA_DIR / "briefings"
 DISPLAY_NAMES = {'kuiper': 'Amazon Leo',
                  'starlink': 'Starlink'}
 
+# Agent
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
+
 # functions
 def setup_logging(level=logging.INFO):
     logging.basicConfig(level=level, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     logging.getLogger("comtypes").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
