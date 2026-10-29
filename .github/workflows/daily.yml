@@ -34,11 +34,18 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - run: pip install -r requirements.txt
-      - run: python -m orbit.pipeline.extract
-      - run: python -m orbit.pipeline.load
+      - id: install
+        run: pip install -r requirements.txt
+
+      - run: python -m orbit.pipeline.extract   # exits 1 if any constellation failed
+
+      # load and commit whatever was fetched, even if one constellation failed;
+      # the job still ends red so the failure gets noticed
+      - if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: python -m orbit.pipeline.load
 
       - name: Commit new snapshots
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         working-directory: lake-store
         run: |
           git config user.name "github-actions[bot]"
