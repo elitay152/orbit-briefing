@@ -6,13 +6,11 @@ from pathlib import Path
 import pyttsx3
 
 from transform import compute_peaks
-from config import setup_logging, LAT, LON, LOCATION_NAME, TS_FORMAT, BRIEFINGS_DIR, TTS_BACKEND, TIMEZONE
+from config import setup_logging, LAT, LON, LOCATION_NAME, TS_FORMAT, BRIEFINGS_DIR, TTS_BACKEND, TIMEZONE, DISPLAY_NAMES
 
 # constants
 DIRECTIONS = ["north", "northeast", "east", "southeast", "south",
             "southwest", "west", "northwest"]
-DISPLAY_NAMES = {'kuiper': 'Amazon Leo',
-                 'starlink': 'Starlink'}
 
 logger = logging.getLogger(__name__)
 

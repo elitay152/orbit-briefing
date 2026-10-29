@@ -4,9 +4,7 @@ from skyfield.api import load, EarthSatellite, wgs84
 import time
 import logging
 
-from config import setup_logging, GROUP_LIST, LAT, LON, LOCATION_NAME, MIN_ALTITUDE_DEG, DB_PATH, LAKE_DIR
-
-LAKE_GLOB = (LAKE_DIR / "*" / "*.parquet").as_posix()
+from config import setup_logging, GROUP_LIST, LAT, LON, LOCATION_NAME, MIN_ALTITUDE_DEG, LAKE_GLOB, LAKE_DIR
 
 LATEST_SQL = f"""
 SELECT * FROM read_parquet('{LAKE_GLOB}', hive_partitioning = true)
@@ -28,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 def latest_elements(con: duckdb.DuckDBPyConnection,
                     constellation: str) -> list[dict]:
-    """Return the latest orbital elements for a given group from the DuckDB database."""
+    """Return the latest orbital elements for a given group from the Parquet lake."""
 
     cursor = con.execute(LATEST_SQL, [constellation])
     columns = [col[0] for col in cursor.description]

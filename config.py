@@ -14,6 +14,8 @@ DATA_DIR = Path(__file__).parent / "data"
 RAW_DATA_DIR = DATA_DIR / "raw"
 DB_PATH = DATA_DIR / "orbit.duckdb"
 LAKE_DIR = Path(os.environ.get("LAKE_DIR", DATA_DIR / "lake" / "orbital_elements"))
+LAKE_GLOB = (LAKE_DIR / "*" / "*.parquet").as_posix()
+ANALYSIS_DIR = DATA_DIR / "analysis"
 
 # Extract
 GROUP_LIST = ["kuiper", "starlink"]
@@ -30,6 +32,8 @@ TIMEZONE = ZoneInfo(os.environ.get("TIMEZONE", "UTC"))
 # TTS
 TTS_BACKEND = os.environ.get("TTS_BACKEND", "pyttsx3")
 BRIEFINGS_DIR = DATA_DIR / "briefings"
+DISPLAY_NAMES = {'kuiper': 'Amazon Leo',
+                 'starlink': 'Starlink'}
 
 # functions
 def setup_logging(level=logging.INFO):
