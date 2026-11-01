@@ -1,12 +1,12 @@
 import json
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import duckdb
 import pandas as pd
 
 from orbit.pipeline.extract import latest_raw
-from orbit.config import setup_logging, GROUP_LIST, LAKE_DIR
+from orbit.config import setup_logging, GROUP_LIST, LAKE_DIR, TS_FORMAT, METRICS_DIR
 
 # constants
 REQUIRED_FIELDS = ['NORAD_CAT_ID', 'OBJECT_NAME', 'OBJECT_ID', 'EPOCH', 
@@ -87,6 +87,48 @@ def to_dataframe(records: list[dict], constellation: str, source_file: str) -> p
 
     return records_df
 
+def build_metrics(snapshot: str, 
+                  raw_count: int, 
+                  df: pd.DataFrame | None,
+                  rejected_count: int) -> pd.DataFrame:
+    """One-row DataFrame of data-quality metrics for a snapshot."""
+
+    snapshot_time = datetime.strptime(snapshot, TS_FORMAT).replace(tzinfo=timezone.utc)
+    records_valid = 0 if df is None else len(df)
+    satellites = 0 if df is None else df["norad_cat_id"].nunique()
+    median_age_hours = (
+        None if df is None
+        else (snapshot_time - df["epoch"]).median().total_seconds() / 3600
+        )
+
+    
+    row = {"snapshot": snapshot,
+          "snapshot_time": snapshot_time,
+          "records_fetched": raw_count,
+          "records_valid": records_valid,
+          "records_rejected": rejected_count,
+          "satellites": satellites,
+          "median_epoch_age_hours": median_age_hours
+          }
+
+    return pd.DataFrame([row])
+
+def write_metrics(con: duckdb.DuckDBPyConnection, 
+                  metrics: pd.DataFrame,
+                  constellation: str, 
+                  snapshot: str) -> Path:
+    """Write one snapshot to the lake; same snapshot → same file (idempotent)."""
+
+    folder = METRICS_DIR / f"constellation={constellation}"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"snapshot={snapshot}.parquet"
+    con.execute(
+        "COPY (SELECT * REPLACE (CAST(median_epoch_age_hours AS DOUBLE) AS median_epoch_age_hours) "
+        f"FROM metrics) TO '{path.as_posix()}' (FORMAT parquet)"
+    ) 
+
+    return path
+
 def write_parquet(con: duckdb.DuckDBPyConnection, df: pd.DataFrame,
                   constellation: str, snapshot: str) -> Path:
     """Write one snapshot to the lake; same snapshot → same file (idempotent)."""
@@ -116,13 +158,18 @@ if __name__ == "__main__":
             logger.debug("First record: %s", json.dumps(raw_data[0], indent=2))
             
             valid_records, invalid_records = validate(raw_data)
-            if not valid_records:
+            snapshot = latest_file.stem
+            df = to_dataframe(valid_records, group, latest_file.name) if valid_records else None
+
+            # always record metrics: an all-rejected day is the one we most want on the chart
+            metrics = build_metrics(snapshot, len(raw_data), df, len(invalid_records))
+            write_metrics(con, metrics, group, snapshot)
+
+            if df is None:
                 logger.warning("%s: no valid records, skipping", group)
                 continue
 
-            df = to_dataframe(valid_records, group, latest_file.name)
-            parquet_path = write_parquet(con, df, group, latest_file.stem)
+            parquet_path = write_parquet(con, df, group, snapshot)
             logger.info("%s: %d valid, %d rejected, wrote %s",
                         group, len(valid_records),
                         len(invalid_records), parquet_path.name)
-            
