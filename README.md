@@ -96,7 +96,7 @@ orbit-briefing/
 ├── demo/                        # sample briefing (audio + transcript) and charts
 ├── data/                        # generated, git-ignored
 │   ├── raw/                     #   timestamped JSON snapshots per constellation
-│   ├── lake/                    #   orbital_elements/constellation=…/snapshot=….parquet
+│   ├── lake/                    #   orbital_elements/… and run_metrics/… (constellation=…/snapshot=….parquet)
 │   ├── briefings/               #   transcripts + audio from each run
 │   └── analysis/                #   flagged-maneuver CSVs
 ├── .github/workflows/           # tests.yml (CI on every push/PR), daily.yml (scheduled snapshot → data branch)
@@ -111,6 +111,8 @@ orbit-briefing/
 - [x] Tests in CI; scheduled daily snapshots building history
 - [x] Prediction-error analysis with maneuver classification
 - [x] Package layout (`orbit/` with pipeline / analysis / agent modules)
+- [x] Daily data-quality metrics per constellation (building history for SPC)
+- [ ] SPC control charts (I-MR on counts, p-chart on rejection rate) once ~25 days of metrics exist
 - [ ] Local LLM agent: verify answers on real questions
 - [ ] Agent evaluation set (scored questions with known answers)
 - [ ] Altitude-by-launch analysis and dashboard

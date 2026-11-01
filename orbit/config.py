@@ -15,6 +15,7 @@ RAW_DATA_DIR = DATA_DIR / "raw"
 LAKE_DIR = Path(os.environ.get("LAKE_DIR", DATA_DIR / "lake" / "orbital_elements"))
 LAKE_GLOB = (LAKE_DIR / "*" / "*.parquet").as_posix()
 ANALYSIS_DIR = DATA_DIR / "analysis"
+METRICS_DIR = LAKE_DIR.parent / "run_metrics"
 
 # Extract
 GROUP_LIST = ["kuiper", "starlink"]
