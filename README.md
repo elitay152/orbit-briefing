@@ -47,6 +47,30 @@ record and compared with that record's position.
 
 *Based on a few days of snapshots; the daily job keeps extending the history.*
 
+## Statistical process control: are satellites moving more than usual?
+
+![Laney p-prime chart of the share of Amazon Leo and Starlink satellites changing altitude each day](demo/spc_altitude_change.png)
+
+Statistical process control separates normal variation from changes worth investigating. This chart
+compares one snapshot per day and tracks the share of satellites whose altitude changed by more than
+0.5 km. That may be a maneuver, atmospheric drag, or noise in the orbit data, so it means "changed
+altitude" rather than "maneuvered."
+
+It's a **Laney p′ chart**, a p-chart adjusted for large samples. Satellites don't change independently, so
+a standard p-chart's limits would be too tight: Starlink's real variation is about 4.8 times wider than
+that formula assumes.
+
+- **No signals so far.** Every day is within its limits.
+- **Starlink changes altitude about 3 times as often:** 6.5% of satellites per day, against 2.1% for Amazon Leo.
+- **Starlink's changes are mostly downward** (2,825 lowered, 823 raised), while Amazon Leo's are closer to
+  balanced (17 lowered, 24 raised).
+
+*Preliminary: only 5 comparisons so far, and limits are usually set from about 25 points. The gaps between
+snapshots also vary (about 16 to 30 hours), which affects how much satellites can change.*
+
+`orbit/analysis/spc.py` also produces an individuals chart of how old the orbit data is at each fetch, as a
+pipeline-health check.
+
 ## Ask the data: local LLM agent
 
 The agent answers questions like *"Which Leo launch has the most satellites?"* using a local model
@@ -92,6 +116,7 @@ python -m orbit.pipeline.extract            # fetch raw snapshots from CelesTrak
 python -m orbit.pipeline.load               # validate and write to the Parquet lake
 python -m orbit.briefing                    # compute passes and generate the spoken briefing
 python -m orbit.analysis.prediction_error   # prediction-error analysis + chart
+python -m orbit.analysis.spc                # control charts (set LAKE_DIR to chart the data branch's history)
 ```
 
 **Agent** (requires [Ollama](https://ollama.com) and a tool-calling model):
@@ -118,7 +143,8 @@ orbit-briefing/
 │   │   ├── load.py              # validate records, write Parquet snapshots (idempotent)
 │   │   └── transform.py         # newest orbit per satellite, compute passes with skyfield
 │   ├── analysis/
-│   │   └── prediction_error.py  # propagate older records, measure error, classify maneuvers, chart
+│   │   ├── prediction_error.py  # propagate older records, measure error, classify maneuvers, chart
+│   │   └── spc.py               # control charts: altitude changes (Laney p′) and data freshness
 │   └── agent/
 │       ├── agent.py             # local LLM agent: sandboxed DuckDB + SQL tool
 │       ├── app.py               # Streamlit chat UI
@@ -145,7 +171,8 @@ orbit-briefing/
 - [x] Package layout (`orbit/` with pipeline / analysis / agent modules)
 - [x] Daily data-quality metrics per constellation (building history for SPC)
 - [x] Local LLM agent with sandboxed SQL, a chat UI, and an evaluation set (scored questions with known answers)
-- [ ] SPC control charts (I-MR on counts, p-chart on rejection rate) once ~25 days of metrics exist
+- [x] First control charts: altitude changes (Laney p′) and data freshness, with preliminary limits
+- [ ] Baseline SPC limits (~25 days of history)
 - [ ] Held-out evaluation questions
 - [ ] Altitude-by-launch analysis and dashboard
 - [ ] Maneuver/decay detection over longer history
