@@ -1,4 +1,23 @@
+import duckdb
 import pytest
+
+import orbit.agent.agent as agent
+from orbit.pipeline.load import to_dataframe, write_parquet
+
+@pytest.fixture
+def sandbox(valid_record, tmp_path, monkeypatch):
+    lake = tmp_path / "lake"
+    monkeypatch.setattr("orbit.pipeline.load.LAKE_DIR", lake)
+    monkeypatch.setattr("orbit.agent.agent.LAKE_GLOB", (lake / "*" / "*.parquet").as_posix())
+
+    with duckdb.connect() as writer:
+        df = to_dataframe([valid_record], "kuiper", "test.json")
+        write_parquet(writer, df, "kuiper", "20261028T000000Z")
+
+    con = agent.open_sandbox()
+    monkeypatch.setattr("orbit.agent.agent._con", con)
+    yield con
+    con.close()
 
 @pytest.fixture
 def valid_record():

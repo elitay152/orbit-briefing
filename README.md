@@ -39,10 +39,8 @@ record and compared with that record's position.
 ## Ask the data: local LLM agent
 
 The agent answers questions like *"Which Leo launch has the most satellites?"* using a local model
-(Ollama) that calls two tools:
-
-- `describe_schema()` explains the tables, columns, units and allowed values
-- `run_sql(query)` runs a single read-only query and returns at most 50 rows
+(Ollama). The system prompt describes the tables, columns, units and allowed values, and the model
+has one tool: `run_sql(query)`, which runs a single read-only query and returns at most 50 rows.
 
 The model never touches files or the real data directly. Guardrails are layered:
 1. The lake is copied into an **in-memory** DuckDB, then **file access is disabled and the configuration locked**
@@ -50,7 +48,25 @@ The model never touches files or the real data directly. Guardrails are layered:
 3. SQL errors are returned to the model as text so it can correct its own query
 
 Each layer is covered by tests, including attempts to `DROP`, chain statements, read files, and
-re-enable file access.
+re-enable file access. Asked to delete the Starlink data during evaluation, the model really did try
+`DELETE FROM orbital_elements`; the guardrail rejected it.
+
+### Evaluation
+
+22 questions with known answers are scored automatically. Correct answers come from gold SQL queries
+run on the same data the agent sees, so they stay right as the data changes.
+
+| Version (`qwen2.5:7b`) | Score | Number | Text | Should decline | Avg. time |
+|---|---|---|---|---|---|
+| Baseline | 16 / 22 (73%) | 12 / 14 | 2 / 4 | 2 / 4 | 23.7 s |
+| Added a `launch` column, stricter prompt, schema in the prompt only | 20 / 22 (91%) | 14 / 14 | 3 / 4 | 3 / 4 | 15.5 s |
+
+Still failing: a harder query comparing each satellite's first and latest records, and a question about
+OneWeb, which isn't in the data (the agent answered with the Starlink count instead).
+
+**Limits:** the fixes were made after seeing these same questions, so 91% is likely optimistic for new
+questions. The set is small (one question is about 4.5 points), and scoring is simple: a number question
+passes if the right number appears anywhere in the answer.
 
 ## Run
 All commands run from the repository root.
@@ -70,7 +86,8 @@ python -m orbit.analysis.prediction_error   # prediction-error analysis + chart
 **Agent** (requires [Ollama](https://ollama.com) and a tool-calling model):
 ```bash
 ollama pull qwen2.5:7b       # or set OLLAMA_MODEL in .env
-python -m orbit.agent.agent
+python -m orbit.agent.agent      # ask questions
+python -m orbit.agent.evaluate   # score the agent; saves a CSV to data/analysis/
 ```
 
 ## Tests
@@ -91,14 +108,16 @@ orbit-briefing/
 │   ├── analysis/
 │   │   └── prediction_error.py  # propagate older records, measure error, classify maneuvers, chart
 │   └── agent/
-│       └── agent.py             # local LLM agent: sandboxed DuckDB + SQL/schema tools
-├── tests/                       # pytest: validation, Parquet writes, speech helpers, prediction error, agent guardrails
+│       ├── agent.py             # local LLM agent: sandboxed DuckDB + SQL tool
+│       ├── eval_cases.py        # evaluation questions with gold SQL queries
+│       └── evaluate.py          # score the agent on those questions
+├── tests/                       # pytest: validation, Parquet writes, speech helpers, prediction error, agent guardrails, eval scoring
 ├── demo/                        # sample briefing (audio + transcript) and charts
 ├── data/                        # generated, git-ignored
 │   ├── raw/                     #   timestamped JSON snapshots per constellation
 │   ├── lake/                    #   orbital_elements/… and run_metrics/… (constellation=…/snapshot=….parquet)
 │   ├── briefings/               #   transcripts + audio from each run
-│   └── analysis/                #   flagged-maneuver CSVs
+│   └── analysis/                #   flagged-maneuver and evaluation CSVs
 ├── .github/workflows/           # tests.yml (CI on every push/PR), daily.yml (scheduled snapshot → data branch)
 ├── .env.example                 # settings: location, time zone, TTS backend, Ollama model
 ├── pytest.ini
@@ -112,8 +131,8 @@ orbit-briefing/
 - [x] Prediction-error analysis with maneuver classification
 - [x] Package layout (`orbit/` with pipeline / analysis / agent modules)
 - [x] Daily data-quality metrics per constellation (building history for SPC)
+- [x] Local LLM agent with sandboxed SQL and an evaluation set (scored questions with known answers)
 - [ ] SPC control charts (I-MR on counts, p-chart on rejection rate) once ~25 days of metrics exist
-- [ ] Local LLM agent: verify answers on real questions
-- [ ] Agent evaluation set (scored questions with known answers)
+- [ ] Agent UI
 - [ ] Altitude-by-launch analysis and dashboard
 - [ ] Maneuver/decay detection over longer history
