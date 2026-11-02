@@ -187,3 +187,122 @@ EVAL_CASES = [
         "kind": "decline",
     },
 ]
+
+# Held-out questions, written after the prompt and schema fixes and never used to tune them.
+# Don't change the agent based on these: once you do, they stop being a fair test, and a
+# new held-out set is needed.
+HELDOUT_CASES = [
+    {
+        "id": "starlink_launch_count",
+        "question": "How many separate Starlink launches are there?",
+        "kind": "number",
+        "gold_sql": "SELECT count(DISTINCT substr(object_id, 1, 8)) FROM latest_elements WHERE constellation = 'starlink'",
+        "tolerance": 0,
+    },
+    {
+        "id": "starlink_below_400km",
+        "question": "How many Starlink satellites are below 400 km?",
+        "kind": "number",
+        "gold_sql": "SELECT count(*) FROM latest_elements WHERE constellation = 'starlink' AND altitude_km < 400",
+        "tolerance": 0,
+    },
+    {
+        "id": "leo_launched_2026",
+        "question": "How many Amazon Leo satellites were launched in 2026?",
+        "kind": "number",
+        "gold_sql": "SELECT count(*) FROM latest_elements WHERE constellation = 'kuiper' AND object_id LIKE '2026-%'",
+        "tolerance": 0,
+    },
+    {
+        "id": "leo_median_altitude",
+        "question": "What is the median altitude of Amazon Leo satellites?",
+        "kind": "number",
+        "gold_sql": "SELECT median(altitude_km) FROM latest_elements WHERE constellation = 'kuiper'",
+        "tolerance": 1,
+    },
+    {
+        "id": "dtc_avg_altitude",
+        "question": "What is the average altitude of Starlink Direct to Cell satellites? Their names contain DTC.",
+        "kind": "number",
+        "gold_sql": "SELECT avg(altitude_km) FROM latest_elements WHERE object_name LIKE '%DTC%'",
+        "tolerance": 1,
+    },
+    {
+        "id": "avg_altitude_difference",
+        "question": "How many kilometers higher is the average Amazon Leo satellite than the average Starlink satellite?",
+        "kind": "number",
+        "gold_sql": """
+            SELECT avg(altitude_km) FILTER (constellation = 'kuiper')
+                 - avg(altitude_km) FILTER (constellation = 'starlink')
+            FROM latest_elements
+        """,
+        "tolerance": 1,
+    },
+    {
+        "id": "starlink_total_records",
+        "question": "How many orbit records are stored in total for Starlink, across all dates?",
+        "kind": "number",
+        "gold_sql": "SELECT count(*) FROM orbital_elements WHERE constellation = 'starlink'",
+        "tolerance": 0,
+    },
+    {
+        "id": "highest_leo_satellite",
+        "question": "Which Amazon Leo satellite has the highest altitude?",
+        "kind": "text",
+        "gold_sql": """
+            SELECT object_name FROM latest_elements
+            WHERE constellation = 'kuiper'
+            QUALIFY rank() OVER (ORDER BY altitude_km DESC) = 1
+        """,
+    },
+    {
+        "id": "most_recent_leo_launch",
+        "question": "What is the most recent Amazon Leo launch in the data?",
+        "kind": "text",
+        "gold_sql": "SELECT max(substr(object_id, 1, 8)) FROM latest_elements WHERE constellation = 'kuiper'",
+    },
+    {
+        "id": "lowest_leo_launch",
+        "question": "Which Amazon Leo launch has the lowest average altitude?",
+        "kind": "text",
+        "gold_sql": """
+            SELECT substr(object_id, 1, 8) FROM latest_elements
+            WHERE constellation = 'kuiper'
+            GROUP BY 1
+            QUALIFY rank() OVER (ORDER BY avg(altitude_km)) = 1
+        """,
+    },
+    {
+        "id": "largest_starlink_launch",
+        "question": "Which Starlink launch has the most satellites?",
+        "kind": "text",
+        "gold_sql": """
+            SELECT substr(object_id, 1, 8) FROM latest_elements
+            WHERE constellation = 'starlink'
+            GROUP BY 1
+            QUALIFY rank() OVER (ORDER BY count(*) DESC) = 1
+        """,
+    },
+    {
+        "id": "iridium_not_in_data",
+        "question": "How many Iridium satellites are there?",
+        "kind": "decline",
+    },
+    {
+        "id": "next_launch_not_in_data",
+        "question": "When is the next Amazon Leo launch scheduled?",
+        "kind": "decline",
+    },
+    {
+        "id": "satellite_mass_not_in_data",
+        "question": "How much does a Starlink satellite weigh?",
+        "kind": "decline",
+    },
+    {
+        "id": "rename_request",
+        "question": "Rename every Amazon Leo satellite to start with LEO instead of KUIPER.",
+        "kind": "decline",
+    },
+]
+
+EVAL_SETS = {"tuning": EVAL_CASES, "heldout": HELDOUT_CASES}

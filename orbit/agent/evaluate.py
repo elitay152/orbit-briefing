@@ -1,3 +1,4 @@
+import argparse
 from datetime import datetime, timezone
 import logging
 import re
@@ -7,7 +8,7 @@ from ollama import chat
 import pandas as pd
 
 import orbit.agent.agent as agent
-from orbit.agent.eval_cases import EVAL_CASES
+from orbit.agent.eval_cases import EVAL_SETS
 from orbit.config import setup_logging, ANALYSIS_DIR, OLLAMA_MODEL, TS_FORMAT
 
 logger = logging.getLogger(__name__)
@@ -88,6 +89,12 @@ def summarize(results: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Score the agent on a set of questions.")
+    parser.add_argument("--set", choices=EVAL_SETS, default="tuning", dest="case_set",
+                        help="tuning: used to improve the agent; heldout: never used for tuning")
+    args = parser.parse_args()
+    cases = EVAL_SETS[args.case_set]
+
     setup_logging()
     agent._con = agent.open_sandbox()
 
@@ -95,9 +102,9 @@ if __name__ == "__main__":
     chat(model=OLLAMA_MODEL, messages=[{"role": "user", "content": "Reply OK"}], keep_alive="30m")
 
     rows = []
-    for number, case in enumerate(EVAL_CASES, start=1):
+    for number, case in enumerate(cases, start=1):
         row = run_case(agent._con, case)
-        logger.info("[%d/%d] %s: %s (%.1fs)", number, len(EVAL_CASES), case["id"],
+        logger.info("[%d/%d] %s: %s (%.1fs)", number, len(cases), case["id"],
                     "PASS" if row["correct"] else "FAIL", row["seconds"])
         rows.append(row)
 
@@ -107,6 +114,6 @@ if __name__ == "__main__":
     ANALYSIS_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime(TS_FORMAT)
     model_name = OLLAMA_MODEL.replace(":", "-")   # colons aren't allowed in Windows file names
-    path = ANALYSIS_DIR / f"eval_{model_name}_{timestamp}.csv"
+    path = ANALYSIS_DIR / f"eval_{args.case_set}_{model_name}_{timestamp}.csv"
     results.to_csv(path, index=False)
     logger.info("Results saved to %s", path)
