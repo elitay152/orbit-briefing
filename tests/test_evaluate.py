@@ -1,6 +1,6 @@
 import pytest
 
-from orbit.agent.eval_cases import EVAL_CASES
+from orbit.agent.eval_cases import EVAL_CASES, HELDOUT_CASES
 from orbit.agent.evaluate import extract_numbers, gold_values, score_answer
 
 NUMBER_CASE = {"kind": "number", "tolerance": 0}
@@ -42,11 +42,16 @@ def test_unknown_kind_is_an_error():
 
 
 def test_case_ids_are_unique():
-    ids = [case["id"] for case in EVAL_CASES]
+    ids = [case["id"] for case in EVAL_CASES + HELDOUT_CASES]
     assert len(ids) == len(set(ids))
 
 
-@pytest.mark.parametrize("case", EVAL_CASES, ids=lambda c: c["id"])
+def test_heldout_questions_are_not_in_the_tuning_set():
+    tuning = {case["question"] for case in EVAL_CASES}
+    assert not tuning & {case["question"] for case in HELDOUT_CASES}
+
+
+@pytest.mark.parametrize("case", EVAL_CASES + HELDOUT_CASES, ids=lambda c: c["id"])
 def test_every_gold_query_runs(sandbox, case):
     # a broken gold query would make the agent look wrong, so catch it here
     gold = gold_values(sandbox, case)

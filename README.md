@@ -20,7 +20,7 @@ Results are delivered as a short spoken briefing.
 - Idempotent raw → Parquet pipeline, scheduled daily on GitHub Actions; history accumulates on the [`data` branch](https://github.com/elitay152/orbit-briefing/tree/data)
 - Orbit-prediction error analysis that flags likely maneuvers (raising / lowering)
 - Local agent (Ollama) with a chat UI that answers questions by writing SQL against a locked-down DuckDB sandbox
-- [Evaluation set](#evaluation): fixes based on its failures took the agent from 73% to 91% on 22 scored questions
+- [Evaluation](#evaluation): fixes took the agent from 73% to 91% on 22 scored questions, and it got 80% on 15 held-out questions it wasn't tuned on
 - Tested with pytest in CI, including guardrail tests for the agent's SQL tool
 
 *Independent personal project using public data; not affiliated with Amazon, SpaceX or CelesTrak.*
@@ -99,9 +99,27 @@ run on the same data the agent sees, so they stay right as the data changes.
 Still failing: a harder query comparing each satellite's first and latest records, and a question about
 OneWeb, which isn't in the data (the agent answered with the Starlink count instead).
 
-**Limits:** the fixes were made after seeing these same questions, so 91% is likely optimistic for new
-questions. The set is small (one question is about 4.5 points), and scoring is simple: a number question
-passes if the right number appears anywhere in the answer.
+The fixes were made after seeing those questions, so 91% is likely optimistic. To get a fairer number, I
+wrote **15 new held-out questions** after the fixes, ran them once, and didn't tune anything afterwards:
+
+| Set (`qwen2.5:7b`) | Automatic score | After reading the answers | Avg. time |
+|---|---|---|---|
+| Held-out, 15 new questions | 13 / 15 (87%) | **12 / 15 (80%)** | 13.3 s |
+
+**The 80% is the number to trust.** One automatic pass was a lucky one: asked for the largest Starlink
+launch, the agent counted orbit records instead of satellites. It named a correct launch but said 104
+satellites when the real number is 54.
+
+The two scored failures:
+- **Confusing launch date with launches:** asked how many Leo satellites launched in 2026, it counted
+  launches (14) instead of satellites (216).
+- **Answering about the wrong operator:** asked about Iridium, it reported the Starlink count. This is the
+  same mistake as the OneWeb question, so the prompt rule didn't fix that behavior.
+
+**Limits:** these sets are small (one held-out question is about 7 points), and scoring is simple: a number
+question passes if the right number appears anywhere in the answer. Only the held-out answers were reviewed
+by hand, so the 91% could also include lucky passes. Fixing these failures would use up the held-out set, so
+any further tuning needs new questions.
 
 ## Run
 All commands run from the repository root.
@@ -125,6 +143,7 @@ ollama pull qwen2.5:7b       # or set OLLAMA_MODEL in .env
 python -m streamlit run orbit/agent/app.py   # chat UI, showing the SQL behind each answer
 python -m orbit.agent.agent                  # the same agent in the terminal
 python -m orbit.agent.evaluate               # score the agent; saves a CSV to data/analysis/
+python -m orbit.agent.evaluate --set heldout # score on questions never used for tuning
 ```
 
 ## Tests
@@ -173,6 +192,6 @@ orbit-briefing/
 - [x] Local LLM agent with sandboxed SQL, a chat UI, and an evaluation set (scored questions with known answers)
 - [x] First control charts: altitude changes (Laney p′) and data freshness, with preliminary limits
 - [ ] Baseline SPC limits (~25 days of history)
-- [ ] Held-out evaluation questions
+- [x] Held-out evaluation questions
 - [ ] Altitude-by-launch analysis and dashboard
 - [ ] Maneuver/decay detection over longer history
