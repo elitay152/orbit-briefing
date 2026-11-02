@@ -152,6 +152,12 @@ def call_tool(name: str, arguments: dict) -> str:
 
 def ask(question: str) -> str:
     """Answer one question, letting the model call tools until it replies with text."""
+    answer, _ = ask_traced(question)
+    return answer
+
+def ask_traced(question: str) -> tuple[str, list[dict]]:
+    """Like ask(), but also return each tool call made, as {"arguments", "result"} dicts."""
+    trace = []
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT + "\n\n" + describe_schema()},
         {"role": "user", "content": question},
@@ -170,13 +176,14 @@ def ask(question: str) -> str:
         logger.info("model round took %.1fs", time.perf_counter() - start)
 
         if not response.message.tool_calls:
-            return response.message.content          # no tool requested → final answer
+            return response.message.content, trace   # no tool requested → final answer
 
         for call in response.message.tool_calls:
             result = call_tool(call.function.name, call.function.arguments)
+            trace.append({"arguments": dict(call.function.arguments), "result": result})
             messages.append({"role": "tool", "content": result, "tool_name": call.function.name})
 
-    return "Stopped: too many tool calls without an answer."
+    return "Stopped: too many tool calls without an answer.", trace
 
 if __name__ == "__main__":
     setup_logging()

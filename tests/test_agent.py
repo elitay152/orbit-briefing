@@ -1,5 +1,6 @@
 import pytest
 import duckdb
+from types import SimpleNamespace
 
 import orbit.agent.agent as agent
 
@@ -70,3 +71,49 @@ def test_configuration_is_locked(sandbox):
     # defense in depth: even bypassing run_sql, file access can't be re-enabled
     with pytest.raises(duckdb.Error):
         sandbox.execute("SET enable_external_access = true")
+
+# --- ask_traced ------------------------------------------------------------
+
+def fake_chat(replies):
+    """Stand in for the model: return each scripted message in turn."""
+    remaining = iter(replies)
+    def chat(**kwargs):
+        return SimpleNamespace(message=next(remaining))
+    return chat
+
+def tool_request(query):
+    call = SimpleNamespace(function=SimpleNamespace(name="run_sql", arguments={"query": query}))
+    return {"tool_calls": [call]}
+
+def model_message(content=None, tool_calls=None):
+    return SimpleNamespace(content=content, tool_calls=tool_calls)
+
+def test_ask_traced_returns_the_answer_and_the_sql(sandbox, monkeypatch):
+    replies = [
+        model_message(tool_calls=tool_request("SELECT count(*) AS n FROM latest_elements")["tool_calls"]),
+        model_message(content="There is 1 satellite."),
+    ]
+    monkeypatch.setattr("orbit.agent.agent.chat", fake_chat(replies))
+
+    answer, trace = agent.ask_traced("How many?")
+
+    assert answer == "There is 1 satellite."
+    assert trace == [{"arguments": {"query": "SELECT count(*) AS n FROM latest_elements"},
+                      "result": "n\n1"}]
+
+def test_ask_traced_records_rejected_queries(sandbox, monkeypatch):
+    replies = [
+        model_message(tool_calls=tool_request("DROP TABLE orbital_elements")["tool_calls"]),
+        model_message(content="I can't do that."),
+    ]
+    monkeypatch.setattr("orbit.agent.agent.chat", fake_chat(replies))
+
+    _, trace = agent.ask_traced("Drop everything")
+
+    assert trace[0]["result"].startswith("Rejected")
+
+def test_ask_gives_up_after_max_rounds(sandbox, monkeypatch):
+    replies = [model_message(tool_calls=tool_request("SELECT 1")["tool_calls"])] * agent.MAX_ROUNDS
+    monkeypatch.setattr("orbit.agent.agent.chat", fake_chat(replies))
+
+    assert agent.ask("Loop forever").startswith("Stopped:")

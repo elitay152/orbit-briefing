@@ -24,5 +24,6 @@ requests==2.34.2
 sgp4==2.27
 six==1.17.0
 skyfield==1.55
+streamlit==1.66.1
 tzdata==2026.5
 urllib3==2.8.0
