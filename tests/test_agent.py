@@ -2,22 +2,6 @@ import pytest
 import duckdb
 
 import orbit.agent.agent as agent
-from orbit.pipeline.load import to_dataframe, write_parquet
-
-@pytest.fixture
-def sandbox(valid_record, tmp_path, monkeypatch):
-    lake = tmp_path / "lake"
-    monkeypatch.setattr("orbit.pipeline.load.LAKE_DIR", lake)
-    monkeypatch.setattr("orbit.agent.agent.LAKE_GLOB", (lake / "*" / "*.parquet").as_posix())
-
-    with agent.duckdb.connect() as writer:
-        df = to_dataframe([valid_record], "kuiper", "test.json")
-        write_parquet(writer, df, "kuiper", "20261028T000000Z")
-
-    con = agent.open_sandbox()
-    monkeypatch.setattr("orbit.agent.agent._con", con)
-    yield con
-    con.close()
 
 # --- describe_schema -------------------------------------------------------
 
@@ -25,6 +9,13 @@ def test_describe_schema_lists_tables_and_key_columns(sandbox):
     schema = agent.describe_schema()
     for expected in ("latest_elements", "orbital_elements", "altitude_km", "constellation"):
         assert expected in schema
+
+# --- launch column ---------------------------------------------------------
+
+@pytest.mark.parametrize("table", ["latest_elements", "orbital_elements"])
+def test_launch_column_is_object_id_without_piece(sandbox, table):
+    result = agent.run_sql(f"SELECT launch FROM {table}")
+    assert result.splitlines() == ["launch", "2025-088"]
 
 # --- run_sql: normal use ---------------------------------------------------
 

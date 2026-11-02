@@ -14,7 +14,8 @@ _con: duckdb.DuckDBPyConnection | None = None
 COLUMN_NOTES = {
     "norad_cat_id": "unique satellite ID",
     "object_name": "e.g. 'KUIPER-00028', 'STARLINK-1007'",
-    "object_id": "launch designator, e.g. '2025-088A'; first 8 characters identify the launch",
+    "object_id": "unique per satellite, e.g. '2025-088A'; do not group by this to find launches",
+    "launch": "launch ID, e.g. '2025-088'; group by this for launch questions",
     "constellation": "'kuiper' (Amazon Leo) or 'starlink'",
     "epoch": "time the orbit record describes (UTC)",
     "mean_motion": "orbits per day; higher means a lower orbit",
@@ -24,15 +25,18 @@ COLUMN_NOTES = {
 }
 
 TABLE_NOTES = {
-    "latest_elements": "newest record per satellite; use for current-state questions",
-    "orbital_elements": "every distinct record over time; use for change-over-time questions",
+    "latest_elements": "exactly one row per satellite (its newest record); use for current-state questions",
+    "orbital_elements": "many rows per satellite over time; use for any question comparing first and latest records or asking about change",
 }
 
 SYSTEM_PROMPT = """You answer questions about satellite constellations using a DuckDB database.
 
-- Always get numbers from the tools; never guess or use outside knowledge for counts.
+- Never state a number that did not come from a run_sql result in this conversation.
 - "Amazon Leo" is constellation = 'kuiper'; "Starlink" is 'starlink'.
-- If unsure of table or column names, call describe_schema first.
+- The database contains only those two constellations and only orbit data: no launch plans, \
+no other operators, no weather. For anything else, say it is not in the data and do not \
+query for it or report 0.
+- Tables and columns are listed below. Use them directly.
 - If a query returns "SQL error", fix it and try again.
 - Answer in one to three sentences and include the key numbers.
 - Round altitudes and distances to whole kilometers.
@@ -44,7 +48,7 @@ def open_sandbox() -> duckdb.DuckDBPyConnection:
     con = duckdb.connect()
     con.execute(f"""
         CREATE TABLE orbital_elements AS 
-        SELECT *
+        SELECT *, substr(object_id, 1, 8) AS launch
         FROM read_parquet('{LAKE_GLOB}', hive_partitioning = true)
         QUALIFY ROW_NUMBER() OVER(PARTITION BY norad_cat_id, epoch
             ORDER BY source_file DESC) = 1
@@ -75,7 +79,7 @@ def run_sql(query: str) -> str:
       - Filter constellations with constellation = 'kuiper' (Amazon Leo) or 'starlink'.
       - At most 50 rows are returned, so aggregate (COUNT, AVG, GROUP BY) instead of
         listing many rows.
-      - If unsure of column names, call describe_schema first.
+      - For launch questions, group by the launch column.
       - If you get "SQL error", read the message, fix the query, and try again.
 
     Args:
@@ -113,7 +117,8 @@ def run_sql(query: str) -> str:
 def describe_schema() -> str:
     """Describe the satellite tables and what each column means (units, allowed values).
 
-    Call this before writing SQL if you are unsure of table or column names.
+    Added to the system prompt rather than offered as a tool: as a tool it cost a
+    full extra model round (about 40s per question instead of 13s).
     """
     if _con is None:
         raise RuntimeError("Sandbox not opened; call open_sandbox() first.")
@@ -127,7 +132,7 @@ def describe_schema() -> str:
     return "\n".join(lines).strip()
 
 MAX_ROUNDS = 6
-TOOLS = {"run_sql": run_sql, "describe_schema": describe_schema}
+TOOLS = {"run_sql": run_sql}
 
 def call_tool(name: str, arguments: dict) -> str:
     """Run a tool the model asked for; unknown tools or bad arguments come back as text."""
