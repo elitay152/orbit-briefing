@@ -8,11 +8,22 @@ lake, and DuckDB queries that lake to compute satellite passes, measure how quic
 go stale, and answer plain-English questions through a local LLM agent with sandboxed SQL tools.
 Results are delivered as a short spoken briefing.
 
+**Ask a question, get an answer, and see the SQL behind it:**
+
+![The agent's chat UI answering which Amazon Leo launch has the most satellites, with the SQL and result shown](demo/agent_ui_answer.jpg)
+
+**Ask it to delete data: the model tries, and the guardrail rejects it:**
+
+![The agent's chat UI: asked to delete data, the model writes a DELETE and the guardrail rejects it](demo/agent_ui_guardrail.jpg)
+
 **Highlights**
 - Idempotent raw → Parquet pipeline, scheduled daily on GitHub Actions; history accumulates on the [`data` branch](https://github.com/elitay152/orbit-briefing/tree/data)
-- Orbit-prediction error analysis with maneuver detection (raising / lowering)
-- Local agent (Ollama) that answers questions by writing SQL against a locked-down DuckDB sandbox
+- Orbit-prediction error analysis that flags likely maneuvers (raising / lowering)
+- Local agent (Ollama) with a chat UI that answers questions by writing SQL against a locked-down DuckDB sandbox
+- [Evaluation set](#evaluation): fixes based on its failures took the agent from 73% to 91% on 22 scored questions
 - Tested with pytest in CI, including guardrail tests for the agent's SQL tool
+
+*Independent personal project using public data; not affiliated with Amazon, SpaceX or CelesTrak.*
 
 ## Sample output
 A sample briefing generated for Seattle on 28 October 2026:
@@ -86,8 +97,9 @@ python -m orbit.analysis.prediction_error   # prediction-error analysis + chart
 **Agent** (requires [Ollama](https://ollama.com) and a tool-calling model):
 ```bash
 ollama pull qwen2.5:7b       # or set OLLAMA_MODEL in .env
-python -m orbit.agent.agent      # ask questions
-python -m orbit.agent.evaluate   # score the agent; saves a CSV to data/analysis/
+python -m streamlit run orbit/agent/app.py   # chat UI, showing the SQL behind each answer
+python -m orbit.agent.agent                  # the same agent in the terminal
+python -m orbit.agent.evaluate               # score the agent; saves a CSV to data/analysis/
 ```
 
 ## Tests
@@ -109,6 +121,7 @@ orbit-briefing/
 │   │   └── prediction_error.py  # propagate older records, measure error, classify maneuvers, chart
 │   └── agent/
 │       ├── agent.py             # local LLM agent: sandboxed DuckDB + SQL tool
+│       ├── app.py               # Streamlit chat UI
 │       ├── eval_cases.py        # evaluation questions with gold SQL queries
 │       └── evaluate.py          # score the agent on those questions
 ├── tests/                       # pytest: validation, Parquet writes, speech helpers, prediction error, agent guardrails, eval scoring
@@ -131,8 +144,8 @@ orbit-briefing/
 - [x] Prediction-error analysis with maneuver classification
 - [x] Package layout (`orbit/` with pipeline / analysis / agent modules)
 - [x] Daily data-quality metrics per constellation (building history for SPC)
-- [x] Local LLM agent with sandboxed SQL and an evaluation set (scored questions with known answers)
+- [x] Local LLM agent with sandboxed SQL, a chat UI, and an evaluation set (scored questions with known answers)
 - [ ] SPC control charts (I-MR on counts, p-chart on rejection rate) once ~25 days of metrics exist
-- [ ] Agent UI
+- [ ] Held-out evaluation questions
 - [ ] Altitude-by-launch analysis and dashboard
 - [ ] Maneuver/decay detection over longer history
