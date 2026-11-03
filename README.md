@@ -6,6 +6,10 @@
 
 ![World map of every tracked Amazon Leo and Starlink satellite, with those that changed altitude ringed](demo/satellite_map.png)
 
+*The charts and numbers in this README are from **Nov 3, 2026**, when there were 8 snapshots. The
+[dashboard](https://elitay152.github.io/orbit-briefing/) recalculates everything from the full history
+each day.*
+
 An end-to-end data project tracking satellite constellations (Amazon Leo and Starlink) from public
 CelesTrak orbit data. A daily pipeline saves raw snapshots, validates them into a partitioned Parquet
 lake, and DuckDB queries that lake to compute satellite passes, measure how quickly orbit predictions
@@ -39,7 +43,9 @@ A sample briefing generated for Seattle on 28 October 2026:
 ![Prediction error vs. age](demo/prediction_error.png)
 
 For each satellite, every older orbit record is propagated (SGP4) to the epoch of the next
-record and compared with that record's position: 77,041 prediction pairs from Oct 27 to Nov 3, 2026.
+record and compared with that record's position.
+
+**As of Nov 3, 2026:** 77,041 prediction pairs, from orbit data dated Oct 27 to Nov 3, 2026.
 
 - **Errors grow as the data ages.** Median error for Starlink is about 0.6 km for data under 6 hours
   old, 8 km at about a day, and 23 km at about two days. Amazon Leo: 0.3, 5 and 12 km.
@@ -51,8 +57,8 @@ record and compared with that record's position: 77,041 prediction pairs from Oc
 - "Changed altitude" can be a maneuver, atmospheric drag, or noise in the orbit data, so it doesn't
   necessarily mean the satellite maneuvered.
 
-*Based on 8 daily snapshots so far; the daily job keeps extending the history, and the
-[dashboard](https://elitay152.github.io/orbit-briefing/) always shows current numbers.*
+*These figures come from the 8 snapshots available on Nov 3, 2026. The
+[dashboard](https://elitay152.github.io/orbit-briefing/) shows the same analysis on the current history.*
 
 ## Statistical process control: are satellites moving more than usual?
 
@@ -67,13 +73,16 @@ It's a **Laney p′ chart**, a p-chart adjusted for large samples. Satellites do
 a standard p-chart's limits would be too tight: Starlink's real variation is about 4.2 times wider than
 that formula assumes.
 
-- **No signals so far.** Every day is within its limits.
+**As of Nov 3, 2026:**
+- **No signals.** Every day was within its limits.
 - **Starlink changes altitude about 3 times as often:** 6.3% of satellites per day, against 1.9% for Amazon Leo.
 - **Starlink's changes are mostly downward** (3,322 lowered, 923 raised), while Amazon Leo's are closer to
   balanced (19 lowered, 26 raised).
 
-*Preliminary: only 6 comparisons so far, and limits are usually set from about 25 points. The gaps between
-snapshots also vary (about 16 to 30 hours), which affects how much satellites can change.*
+*On Nov 3 the limits were preliminary: there were 6 daily comparisons, and limits are usually set from
+about 25 points. The gaps between snapshots also vary (about 16 to 30 hours then), which affects how much
+satellites can change. The [dashboard](https://elitay152.github.io/orbit-briefing/) shows the current chart,
+and its caption stops saying "preliminary" once there's enough history.*
 
 `orbit/analysis/spc.py` also produces an individuals chart of how old the orbit data is at each fetch, as a
 pipeline-health check.
@@ -101,6 +110,9 @@ re-enable file access. Asked to delete the Starlink data during evaluation, the 
 
 22 questions with known answers are scored automatically. Correct answers come from gold SQL queries
 run on the same data the agent sees, so they stay right as the data changes.
+
+The results below are from runs on **Nov 2, 2026**. They describe the agent and model at that point, so
+they don't change as data accumulates; rerunning the evaluation gives a new result.
 
 | Version (`qwen2.5:7b`) | Score | Number | Text | Should decline | Avg. time |
 |---|---|---|---|---|---|
