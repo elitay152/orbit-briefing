@@ -171,3 +171,14 @@ def test_signals_text(signals, expected):
 def test_limits_note_stops_saying_preliminary_with_enough_history():
     assert limits_note(6, "daily comparisons").startswith("Preliminary: 6 daily comparisons so far")
     assert limits_note(400, "snapshots") == "Limits are calculated from all 400 snapshots."
+
+
+def test_preview_tags_give_link_previews_an_absolute_image(points, frames, metrics):
+    from orbit.site.build import SITE_URL, preview_tags
+    kpis = compute_kpis(points, frames, metrics, datetime(2026, 10, 30, tzinfo=timezone.utc))
+    tags = preview_tags(kpis)
+
+    image = re.search(r'property="og:image" content="([^"]+)"', tags).group(1)
+    assert image == SITE_URL + "images/satellite_map.png"      # crawlers can't resolve relative URLs
+    assert 'name="twitter:card" content="summary_large_image"' in tags
+    assert "tracking 6 Amazon Leo and Starlink satellites" in tags   # counted, not hardcoded

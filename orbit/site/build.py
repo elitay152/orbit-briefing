@@ -35,6 +35,8 @@ DEMO_DIR = REPO_ROOT / "demo"
 EVAL_SUMMARY = DEMO_DIR / "eval_summary.json"
 AGENT_SCREENSHOTS = ["agent_ui_answer.jpg", "agent_ui_guardrail.jpg"]
 REPO_URL = "https://github.com/elitay152/orbit-briefing"
+SITE_URL = "https://elitay152.github.io/orbit-briefing/"   # link previews need absolute URLs
+PREVIEW_SIZE = (1800, 1050)                                 # the map image: 12 × 7 in at 150 dpi
 DISCLAIMER = ("Independent personal project using public data; "
               "not affiliated with Amazon, SpaceX or CelesTrak.")
 
@@ -162,6 +164,28 @@ def limits_note(points: int, unit: str) -> str:
                 f"{MIN_BASELINE_POINTS} points.")
     return f"Limits are calculated from all {points:,} {unit}."
 
+def preview_tags(kpis: dict) -> str:
+    """Open Graph and Twitter tags, so a shared link shows a card with the satellite map."""
+    description = (f"A daily data pipeline tracking {kpis['satellites']:,} Amazon Leo and Starlink "
+                   "satellites from public orbit data: GitHub Actions, Parquet, DuckDB, and a live map.")
+    image = SITE_URL + "images/" + IMAGES["map"]
+    alt = "World map of every tracked Amazon Leo and Starlink satellite"
+    tags = [
+        ("property", "og:type", "website"),
+        ("property", "og:site_name", "Orbit Briefing"),
+        ("property", "og:title", "Orbit Briefing: tracking every Amazon Leo and Starlink satellite"),
+        ("property", "og:description", description),
+        ("property", "og:url", SITE_URL),
+        ("property", "og:image", image),
+        ("property", "og:image:width", str(PREVIEW_SIZE[0])),
+        ("property", "og:image:height", str(PREVIEW_SIZE[1])),
+        ("property", "og:image:alt", alt),
+        ("name", "twitter:card", "summary_large_image"),
+        ("name", "twitter:image", image),
+        ("name", "description", description),
+    ]
+    return "\n".join(f'<meta {attr}="{key}" content="{html.escape(value)}">' for attr, key, value in tags)
+
 def render_page(kpis: dict, frames: dict[str, pd.DataFrame], spc: dict, metrics: pd.DataFrame,
                 evaluation: dict | None, built_at: datetime) -> str:
     """The whole dashboard as one self-contained HTML page."""
@@ -227,6 +251,7 @@ def render_page(kpis: dict, frames: dict[str, pd.DataFrame], spc: dict, metrics:
     ]
 
     return PAGE.format(
+        preview=preview_tags(kpis),
         tiles="".join(tiles), cards="".join(cards), repo=REPO_URL,
         updated=html.escape(when_text(kpis["positions_at"])), disclaimer=html.escape(DISCLAIMER),
     )
@@ -292,7 +317,8 @@ PAGE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Orbit Briefing</title>
-<meta name="description" content="A daily data pipeline tracking Amazon Leo and Starlink satellites from public orbit data.">
+<link rel="canonical" href="https://elitay152.github.io/orbit-briefing/">
+{preview}
 <style>
   :root {{
     color-scheme: dark;
