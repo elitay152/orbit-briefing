@@ -130,3 +130,44 @@ def test_build_writes_the_page_and_every_image_it_references(tiny_lake, tmp_path
     assert "not affiliated" in visible_text
     assert "Every satellite I'm tracking: 4," in visible_text   # counted from the fixture, not hardcoded
     assert not re.search(r"\bnan\b", visible_text, flags=re.I)  # no missing values leaking into the page
+
+
+# --- wording that has to stay true as the history grows ------------------------
+
+from orbit.site.build import limits_note, prediction_title, rate_comparison_title, signals_text
+
+
+@pytest.mark.parametrize("ratio, expected", [
+    (None, "How fast satellite orbit predictions go stale"),
+    (7.9, "Satellites that change altitude are about 8× harder to predict"),
+    (1.2, "Satellites that change altitude are about as predictable as those that don't"),
+    (0.5, "Satellites that change altitude are, surprisingly, easier to predict"),
+])
+def test_prediction_title_fits_any_ratio(ratio, expected):
+    assert prediction_title(ratio) == expected
+
+
+@pytest.mark.parametrize("p_bars, expected", [
+    ({"kuiper": 0.019, "starlink": 0.063}, "Starlink satellites change altitude about 3× as often as Amazon Leo's"),
+    ({"kuiper": 0.09, "starlink": 0.03}, "Amazon Leo satellites change altitude about 3× as often as Starlink's"),
+    ({"kuiper": 0.05, "starlink": 0.06}, "Amazon Leo and Starlink satellites change altitude at similar rates"),
+    ({"kuiper": 0.0, "starlink": 0.06}, "Starlink satellites change altitude; Amazon Leo's almost never do"),
+    ({"starlink": 0.06}, "How many satellites change altitude each day"),
+])
+def test_rate_comparison_title_follows_the_data(p_bars, expected):
+    spc = {group: {"p_bar": p, "signals": 0, "points": 6} for group, p in p_bars.items()}
+    assert rate_comparison_title(spc) == expected
+
+
+@pytest.mark.parametrize("signals, expected", [
+    (0, "No unusual days so far."),
+    (1, "1 unusual day flagged; it's marked on the chart."),
+    (3, "3 unusual days flagged; they're marked on the chart."),
+])
+def test_signals_text(signals, expected):
+    assert signals_text(signals) == expected
+
+
+def test_limits_note_stops_saying_preliminary_with_enough_history():
+    assert limits_note(6, "daily comparisons").startswith("Preliminary: 6 daily comparisons so far")
+    assert limits_note(400, "snapshots") == "Limits are calculated from all 400 snapshots."
