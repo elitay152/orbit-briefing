@@ -26,6 +26,7 @@ D2 = 1.128                 # moving-range constant for subgroups of 2
 RUN_LENGTH = 8             # this many points in a row on one side of the mean is a signal
 MIN_BASELINE_POINTS = 25   # below this, limits are only preliminary
 ALTITUDE_CHANGE_KM = 0.5   # a satellite counts as changed if it moved more than this
+MARKER_MAX_POINTS = 60     # above this, charts draw lines without a dot per point
 
 # One snapshot per UTC day (the latest), so the gaps being compared are about a day.
 # Satellites missing from the previous snapshot aren't compared.
@@ -144,6 +145,23 @@ def find_signals(values: list[float], limits: dict[str, float]) -> list[bool]:
 
     return signals
 
+def plural(count: int, word: str) -> str:
+    """'1 signal', '3 signals'."""
+    return f"{count:,} {word}" + ("" if count == 1 else "s")
+
+def marker_size(points: int) -> float:
+    """Dots on each point while they're few enough to see; just the line once the history is long."""
+    return 6 if points <= MARKER_MAX_POINTS else 0
+
+def line_width(points: int) -> float:
+    return 2 if points <= MARKER_MAX_POINTS else 1.2
+
+def set_date_axis(ax) -> None:
+    """Date ticks that stay readable from a week of history to years of it."""
+    locator = mdates.AutoDateLocator(minticks=3, maxticks=8)
+    ax.xaxis.set_major_locator(locator)
+    ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator, show_offset=False))
+
 def plot_p_chart(metrics: pd.DataFrame, path: Path, theme: dict = LIGHT) -> Path:
     """Laney p' chart of the share of satellites changing altitude, one panel per constellation."""
     groups = list(metrics.groupby("constellation"))
@@ -162,7 +180,8 @@ def plot_p_chart(metrics: pd.DataFrame, path: Path, theme: dict = LIGHT) -> Path
         ax.plot(times, ucl, color=theme["muted"], linewidth=1, linestyle="--")
         ax.plot(times, lcl, color=theme["muted"], linewidth=1, linestyle="--")
         ax.axhline(limits["p_bar"] * 100, color=theme["muted"], linewidth=1)
-        ax.plot(times, rates, color=theme["line"], linewidth=2, marker="o", markersize=6,
+        ax.plot(times, rates, color=theme["line"], linewidth=line_width(len(df)), marker="o",
+                markersize=marker_size(len(df)),
                 markeredgecolor=theme["surface"], markeredgewidth=1)
 
         flagged_times = [t for t, s in zip(times, signals) if s]
@@ -175,10 +194,9 @@ def plot_p_chart(metrics: pd.DataFrame, path: Path, theme: dict = LIGHT) -> Path
                         xycoords=("axes fraction", "data"), xytext=(4, 0),
                         textcoords="offset points", va="center", fontsize=9, color=theme["ink_2"])
 
-        ax.set_title(f"{DISPLAY_NAMES.get(group, group)}  ·  {len(df)} comparisons, "
-                     f"{sum(signals)} signals", loc="left", fontsize=11, color=theme["ink"])
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
-        ax.xaxis.set_major_locator(mdates.DayLocator())
+        ax.set_title(f"{DISPLAY_NAMES.get(group, group)}  ·  {plural(len(df), 'comparison')}, "
+                     f"{plural(sum(signals), 'signal')}", loc="left", fontsize=11, color=theme["ink"])
+        set_date_axis(ax)
         ax.grid(True, axis="y", color=theme["grid"], linewidth=0.6)
         ax.set_axisbelow(True)
         for side in ("top", "right"):
@@ -190,7 +208,9 @@ def plot_p_chart(metrics: pd.DataFrame, path: Path, theme: dict = LIGHT) -> Path
     # after all panels are drawn, so the top limit includes every point
     axes[0][0].set_ylim(bottom=0)
     axes[0][0].set_ylabel(f"Satellites changing more than {ALTITUDE_CHANGE_KM} km (%)", color=theme["ink_2"])
-    fig.suptitle("Share of satellites changing altitude each day: Laney p′ chart (preliminary limits)",
+    points = metrics.groupby("constellation").size().min()
+    status = "preliminary limits" if points < MIN_BASELINE_POINTS else "baseline limits"
+    fig.suptitle(f"Share of satellites changing altitude each day: Laney p′ chart ({status})",
                  x=0.01, ha="left", fontsize=13, color=theme["ink"])
     # manual margins: tight_layout can't account for the limit labels outside the axes
     fig.subplots_adjust(left=0.07, right=0.92, top=0.82, bottom=0.1, wspace=0.3)
@@ -211,7 +231,8 @@ def plot_control_chart(metrics: pd.DataFrame, path: Path, theme: dict = LIGHT) -
         signals = find_signals(values, limits)
 
         ax.set_facecolor(theme["surface"])
-        ax.plot(times, values, color=theme["line"], linewidth=2, marker="o", markersize=6,
+        ax.plot(times, values, color=theme["line"], linewidth=line_width(len(values)), marker="o",
+                markersize=marker_size(len(values)),
                 markeredgecolor=theme["surface"], markeredgewidth=1)
 
         flagged = df[signals]
@@ -225,10 +246,9 @@ def plot_control_chart(metrics: pd.DataFrame, path: Path, theme: dict = LIGHT) -
                         xycoords=("axes fraction", "data"), xytext=(4, 0),
                         textcoords="offset points", va="center", fontsize=9, color=theme["ink_2"])
 
-        ax.set_title(f"{DISPLAY_NAMES.get(group, group)}  ·  {len(values)} snapshots, "
-                     f"{sum(signals)} signals", loc="left", fontsize=11, color=theme["ink"])
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
-        ax.xaxis.set_major_locator(mdates.DayLocator())
+        ax.set_title(f"{DISPLAY_NAMES.get(group, group)}  ·  {plural(len(values), 'snapshot')}, "
+                     f"{plural(sum(signals), 'signal')}", loc="left", fontsize=11, color=theme["ink"])
+        set_date_axis(ax)
         ax.grid(True, axis="y", color=theme["grid"], linewidth=0.6)
         ax.set_axisbelow(True)
         for side in ("top", "right"):

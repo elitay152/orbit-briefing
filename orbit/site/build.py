@@ -125,6 +125,43 @@ def card(title: str, caption: str, images: list[tuple[str, str]], dark: bool = F
     return (f'<section class="card{" dark" if dark else ""}"><h2>{html.escape(title)}</h2>'
             f'<p class="caption">{html.escape(caption)}</p><div class="figures">{figures}</div></section>')
 
+def prediction_title(ratio: float | None) -> str:
+    """Card title for the prediction-error chart, worded to fit whatever the ratio turns out to be."""
+    if ratio is None:
+        return "How fast satellite orbit predictions go stale"
+    if ratio >= 1.5:
+        return f"Satellites that change altitude are about {ratio:.0f}× harder to predict"
+    if ratio > 1 / 1.5:
+        return "Satellites that change altitude are about as predictable as those that don't"
+    return "Satellites that change altitude are, surprisingly, easier to predict"
+
+def rate_comparison_title(spc: dict) -> str:
+    """Card title comparing how often each constellation changes altitude, whichever is higher."""
+    if len(spc) != 2:
+        return "How many satellites change altitude each day"
+    (low, low_stats), (high, high_stats) = sorted(spc.items(), key=lambda item: item[1]["p_bar"])
+    if low_stats["p_bar"] == 0:
+        return f"{name(high)} satellites change altitude; {name(low)}'s almost never do"
+    ratio = high_stats["p_bar"] / low_stats["p_bar"]
+    if ratio < 1.5:
+        return f"{name(low)} and {name(high)} satellites change altitude at similar rates"
+    return f"{name(high)} satellites change altitude about {ratio:.0f}× as often as {name(low)}'s"
+
+def signals_text(signals: int) -> str:
+    """'No unusual days so far.', '1 unusual day flagged…', or 'N unusual days flagged…'."""
+    if signals == 0:
+        return "No unusual days so far."
+    if signals == 1:
+        return "1 unusual day flagged; it's marked on the chart."
+    return f"{signals} unusual days flagged; they're marked on the chart."
+
+def limits_note(points: int, unit: str) -> str:
+    """Caveat on the control limits, which only stops saying 'preliminary' once there's enough history."""
+    if points < MIN_BASELINE_POINTS:
+        return (f"Preliminary: {points:,} {unit} so far, and limits are usually set from about "
+                f"{MIN_BASELINE_POINTS} points.")
+    return f"Limits are calculated from all {points:,} {unit}."
+
 def render_page(kpis: dict, frames: dict[str, pd.DataFrame], spc: dict, metrics: pd.DataFrame,
                 evaluation: dict | None, built_at: datetime) -> str:
     """The whole dashboard as one self-contained HTML page."""
@@ -135,26 +172,17 @@ def render_page(kpis: dict, frames: dict[str, pd.DataFrame], spc: dict, metrics:
     tiles = [
         tile("Satellites tracked", f"{kpis['satellites']:,}", count_detail),
         tile("Changed altitude since the previous snapshot", f"{kpis['changed']:,}", share_detail),
-        tile("Harder to predict after an altitude change",
+        tile("Prediction error: changed vs. held altitude",
              f"≈{fmt(kpis['ratio'], '.0f')}×" if kpis["ratio"] else "—",
              f"Median error on day-old data: {fmt(kpis['held_km'])} km held vs. "
              f"{fmt(kpis['changed_km'])} km changed"),
-        tile("Daily snapshots", f"{kpis['snapshots']:,}", kpis["date_range"]),
+        tile("Snapshots", f"{kpis['snapshots']:,}", kpis["date_range"]),
         tile("Last data update", when_text(kpis["positions_at"]), f"Page built {when_text(built_at)}"),
     ]
 
     pairs = sum(len(df) for df in frames.values())
-    prediction_title = (f"Satellites that change altitude are about {kpis['ratio']:.0f}× harder to predict"
-                        if kpis["ratio"] else "How fast satellite orbit predictions go stale")
-
-    if {"kuiper", "starlink"} <= spc.keys() and spc["kuiper"]["p_bar"] > 0:
-        times_as_often = spc["starlink"]["p_bar"] / spc["kuiper"]["p_bar"]
-        spc_title = f"Starlink satellites change altitude about {times_as_often:.0f}× as often as Amazon Leo's"
-    else:
-        spc_title = "How many satellites change altitude each day"
     signals = sum(s["signals"] for s in spc.values())
     comparisons = min((s["points"] for s in spc.values()), default=0)
-    signal_text = "No unusual days so far." if signals == 0 else f"{signals} unusual day(s) flagged."
 
     ages = metrics["median_age_hours"] if not metrics.empty else pd.Series(dtype=float)
     freshness_title = (f"Orbit data is typically about {ages.median():.0f} hours old when the pipeline fetches it"
@@ -168,7 +196,7 @@ def render_page(kpis: dict, frames: dict[str, pd.DataFrame], spc: dict, metrics:
              "satellite maneuvered.",
              [(IMAGES["map"], f"World map of {kpis['satellites']:,} Amazon Leo and Starlink satellites, "
                               f"with {kpis['changed']:,} that changed altitude ringed")], dark=True),
-        card(prediction_title,
+        card(prediction_title(kpis["ratio"]),
              f"Each orbit record is propagated to the next one with SGP4 and compared with it: "
              f"{pairs:,} prediction pairs. The right panel uses data {DAY_OLD[0]}–{DAY_OLD[1]} days old; "
              f"'changed' means more than {MANEUVER_ALT_KM} km. Small altitude changes shift a satellite's "
@@ -176,16 +204,16 @@ def render_page(kpis: dict, frames: dict[str, pd.DataFrame], spc: dict, metrics:
              [(IMAGES["prediction_error"], "Two charts: median prediction error rising as orbit data ages "
                                            "for each constellation, and much larger errors for satellites "
                                            "whose altitude changed")]),
-        card(spc_title,
+        card(rate_comparison_title(spc),
              f"A Laney p′ control chart of the share of satellites changing altitude by more than "
-             f"{ALTITUDE_CHANGE_KM} km between daily snapshots. {signal_text} Preliminary: {comparisons} "
-             f"comparisons so far, and limits are usually set from about {MIN_BASELINE_POINTS} points.",
+             f"{ALTITUDE_CHANGE_KM} km between daily snapshots. {signals_text(signals)} "
+             f"{limits_note(comparisons, 'daily comparisons')}",
              [(IMAGES["spc_altitude"], "Control charts of the daily share of Amazon Leo and Starlink "
                                        "satellites changing altitude, with control limits")]),
         card(freshness_title,
              "An individuals control chart of the median age of the orbit data at each fetch, as a "
-             f"pipeline-health check. Preliminary: limits are usually set from about {MIN_BASELINE_POINTS} "
-             "points. The time of day the job runs also affects the age.",
+             f"pipeline-health check. {limits_note(kpis['snapshots'], 'snapshots')} "
+             "The time of day the job runs also affects the age.",
              [(IMAGES["spc_freshness"], "Control charts of the median age of the orbit data at each "
                                         "snapshot, for Amazon Leo and Starlink")]),
         evaluation_card(evaluation),

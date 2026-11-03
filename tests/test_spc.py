@@ -142,3 +142,10 @@ def test_laney_limits_handle_no_changes_at_all():
     assert limits["p_bar"] == 0
     assert limits["ucl"] == [0, 0, 0]
     assert not any(rate_signals(limits))
+
+
+@pytest.mark.parametrize("count, word, expected", [(0, "signal", "0 signals"), (1, "signal", "1 signal"),
+                                                   (1200, "snapshot", "1,200 snapshots")])
+def test_plural(count, word, expected):
+    from orbit.analysis.spc import plural
+    assert plural(count, word) == expected
