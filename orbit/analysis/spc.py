@@ -15,6 +15,7 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from orbit.analysis.theme import LIGHT
 from orbit.config import setup_logging, ANALYSIS_DIR, LAKE_GLOB, DISPLAY_NAMES
 
 logger = logging.getLogger(__name__)
@@ -94,6 +95,9 @@ def laney_limits(changed: list[int], compared: list[int]) -> dict:
 
     p_bar = sum(changed) / sum(compared)
     rates = [c / n for c, n in zip(changed, compared)]
+    if p_bar in (0, 1):   # no variation to measure (e.g. no satellite ever changed): limits collapse
+        return {"p_bar": p_bar, "sigma_z": 1.0, "rates": rates,
+                "ucl": [p_bar] * len(rates), "lcl": [p_bar] * len(rates)}
     sigmas = [math.sqrt(p_bar * (1 - p_bar) / n) for n in compared]
     z_scores = [(p - p_bar) / s for p, s in zip(rates, sigmas)]
     moving_ranges = [abs(b - a) for a, b in zip(z_scores, z_scores[1:])]
@@ -140,11 +144,11 @@ def find_signals(values: list[float], limits: dict[str, float]) -> list[bool]:
 
     return signals
 
-def plot_p_chart(metrics: pd.DataFrame, path: Path) -> Path:
+def plot_p_chart(metrics: pd.DataFrame, path: Path, theme: dict = LIGHT) -> Path:
     """Laney p' chart of the share of satellites changing altitude, one panel per constellation."""
     groups = list(metrics.groupby("constellation"))
     fig, axes = plt.subplots(1, len(groups), figsize=(11, 4.4), sharey=True, squeeze=False)
-    fig.patch.set_facecolor("#fcfcfb")
+    fig.patch.set_facecolor(theme["surface"])
 
     for ax, (group, df) in zip(axes[0], groups):
         limits = laney_limits(df["changed"].tolist(), df["compared"].tolist())
@@ -154,51 +158,51 @@ def plot_p_chart(metrics: pd.DataFrame, path: Path) -> Path:
         ucl = [u * 100 for u in limits["ucl"]]
         lcl = [l * 100 for l in limits["lcl"]]
 
-        ax.set_facecolor("#fcfcfb")
-        ax.plot(times, ucl, color="#898781", linewidth=1, linestyle="--")
-        ax.plot(times, lcl, color="#898781", linewidth=1, linestyle="--")
-        ax.axhline(limits["p_bar"] * 100, color="#898781", linewidth=1)
-        ax.plot(times, rates, color="#2a78d6", linewidth=2, marker="o", markersize=6,
-                markeredgecolor="#fcfcfb", markeredgewidth=1)
+        ax.set_facecolor(theme["surface"])
+        ax.plot(times, ucl, color=theme["muted"], linewidth=1, linestyle="--")
+        ax.plot(times, lcl, color=theme["muted"], linewidth=1, linestyle="--")
+        ax.axhline(limits["p_bar"] * 100, color=theme["muted"], linewidth=1)
+        ax.plot(times, rates, color=theme["line"], linewidth=2, marker="o", markersize=6,
+                markeredgecolor=theme["surface"], markeredgewidth=1)
 
         flagged_times = [t for t, s in zip(times, signals) if s]
         flagged_rates = [r for r, s in zip(rates, signals) if s]
-        ax.scatter(flagged_times, flagged_rates, s=90, color="#d03b3b", marker="D",
-                   edgecolors="#fcfcfb", linewidths=1, zorder=3)
+        ax.scatter(flagged_times, flagged_rates, s=90, color=theme["signal"], marker="D",
+                   edgecolors=theme["surface"], linewidths=1, zorder=3)
 
         for value, label in ((ucl[-1], "UCL"), (limits["p_bar"] * 100, "Mean"), (lcl[-1], "LCL")):
             ax.annotate(f"{label} {value:.1f}%", xy=(1, value),
                         xycoords=("axes fraction", "data"), xytext=(4, 0),
-                        textcoords="offset points", va="center", fontsize=9, color="#52514e")
+                        textcoords="offset points", va="center", fontsize=9, color=theme["ink_2"])
 
         ax.set_title(f"{DISPLAY_NAMES.get(group, group)}  ·  {len(df)} comparisons, "
-                     f"{sum(signals)} signals", loc="left", fontsize=11, color="#0b0b0b")
+                     f"{sum(signals)} signals", loc="left", fontsize=11, color=theme["ink"])
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
         ax.xaxis.set_major_locator(mdates.DayLocator())
-        ax.grid(True, axis="y", color="#e1e0d9", linewidth=0.6)
+        ax.grid(True, axis="y", color=theme["grid"], linewidth=0.6)
         ax.set_axisbelow(True)
         for side in ("top", "right"):
             ax.spines[side].set_visible(False)
         for side in ("left", "bottom"):
-            ax.spines[side].set_color("#c3c2b7")
-        ax.tick_params(colors="#898781")
+            ax.spines[side].set_color(theme["axis"])
+        ax.tick_params(colors=theme["muted"])
 
     # after all panels are drawn, so the top limit includes every point
     axes[0][0].set_ylim(bottom=0)
-    axes[0][0].set_ylabel(f"Satellites changing more than {ALTITUDE_CHANGE_KM} km (%)", color="#52514e")
+    axes[0][0].set_ylabel(f"Satellites changing more than {ALTITUDE_CHANGE_KM} km (%)", color=theme["ink_2"])
     fig.suptitle("Share of satellites changing altitude each day: Laney p′ chart (preliminary limits)",
-                 x=0.01, ha="left", fontsize=13, color="#0b0b0b")
+                 x=0.01, ha="left", fontsize=13, color=theme["ink"])
     # manual margins: tight_layout can't account for the limit labels outside the axes
     fig.subplots_adjust(left=0.07, right=0.92, top=0.82, bottom=0.1, wspace=0.3)
     fig.savefig(path, dpi=150, facecolor=fig.get_facecolor())
     plt.close(fig)
     return path
 
-def plot_control_chart(metrics: pd.DataFrame, path: Path) -> Path:
+def plot_control_chart(metrics: pd.DataFrame, path: Path, theme: dict = LIGHT) -> Path:
     """Individuals chart of median data age, one panel per constellation."""
     groups = list(metrics.groupby("constellation"))
     fig, axes = plt.subplots(1, len(groups), figsize=(11, 4.4), sharey=True, squeeze=False)
-    fig.patch.set_facecolor("#fcfcfb")
+    fig.patch.set_facecolor(theme["surface"])
 
     for ax, (group, df) in zip(axes[0], groups):
         values = df["median_age_hours"].tolist()
@@ -206,46 +210,49 @@ def plot_control_chart(metrics: pd.DataFrame, path: Path) -> Path:
         limits = individuals_limits(values)
         signals = find_signals(values, limits)
 
-        ax.set_facecolor("#fcfcfb")
-        ax.plot(times, values, color="#2a78d6", linewidth=2, marker="o", markersize=6,
-                markeredgecolor="#fcfcfb", markeredgewidth=1)
+        ax.set_facecolor(theme["surface"])
+        ax.plot(times, values, color=theme["line"], linewidth=2, marker="o", markersize=6,
+                markeredgecolor=theme["surface"], markeredgewidth=1)
 
         flagged = df[signals]
-        ax.scatter(flagged["snapshot_time"], flagged["median_age_hours"], s=90, color="#d03b3b",
-                   marker="D", edgecolors="#fcfcfb", linewidths=1, zorder=3,
+        ax.scatter(flagged["snapshot_time"], flagged["median_age_hours"], s=90, color=theme["signal"],
+                   marker="D", edgecolors=theme["surface"], linewidths=1, zorder=3,
                    label=f"Signal ({len(flagged)})")
 
         for name, label, style in (("ucl", "UCL", "--"), ("center", "Mean", "-"), ("lcl", "LCL", "--")):
-            ax.axhline(limits[name], color="#898781", linewidth=1, linestyle=style)
+            ax.axhline(limits[name], color=theme["muted"], linewidth=1, linestyle=style)
             ax.annotate(f"{label} {limits[name]:.1f}", xy=(1, limits[name]),
                         xycoords=("axes fraction", "data"), xytext=(4, 0),
-                        textcoords="offset points", va="center", fontsize=9, color="#52514e")
+                        textcoords="offset points", va="center", fontsize=9, color=theme["ink_2"])
 
         ax.set_title(f"{DISPLAY_NAMES.get(group, group)}  ·  {len(values)} snapshots, "
-                     f"{sum(signals)} signals", loc="left", fontsize=11, color="#0b0b0b")
+                     f"{sum(signals)} signals", loc="left", fontsize=11, color=theme["ink"])
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
         ax.xaxis.set_major_locator(mdates.DayLocator())
-        ax.grid(True, axis="y", color="#e1e0d9", linewidth=0.6)
+        ax.grid(True, axis="y", color=theme["grid"], linewidth=0.6)
         ax.set_axisbelow(True)
         for side in ("top", "right"):
             ax.spines[side].set_visible(False)
         for side in ("left", "bottom"):
-            ax.spines[side].set_color("#c3c2b7")
-        ax.tick_params(colors="#898781")
+            ax.spines[side].set_color(theme["axis"])
+        ax.tick_params(colors=theme["muted"])
 
-    axes[0][0].set_ylabel("Median age of orbit data (hours)", color="#52514e")
+    axes[0][0].set_ylabel("Median age of orbit data (hours)", color=theme["ink_2"])
     points = metrics.groupby("constellation").size().min()
     status = "preliminary limits" if points < MIN_BASELINE_POINTS else "baseline limits"
     fig.suptitle(f"Is data freshness stable? Individuals control chart ({status})",
-                 x=0.01, ha="left", fontsize=13, color="#0b0b0b")
+                 x=0.01, ha="left", fontsize=13, color=theme["ink"])
     fig.tight_layout(w_pad=4)
     fig.savefig(path, dpi=150, facecolor=fig.get_facecolor())
     plt.close(fig)
     return path
 
-if __name__ == "__main__":
-    setup_logging()
+def run_spc(p_chart_path: Path, freshness_path: Path,
+            theme: dict = LIGHT) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Compute both charts' metrics from the lake, log a summary, and save both charts.
 
+    Returns (snapshot metrics, altitude-change metrics).
+    """
     with duckdb.connect() as con:
         metrics = snapshot_metrics(con)
         changes = altitude_change_metrics(con)
@@ -256,8 +263,7 @@ if __name__ == "__main__":
                     group, len(df), limits["p_bar"] * 100, limits["sigma_z"],
                     df["raised"].sum(), df["lowered"].sum(), sum(rate_signals(limits)))
 
-    p_chart_path = plot_p_chart(changes, Path("demo") / "spc_altitude_change.png")
-    logger.info("Chart saved to %s", p_chart_path)
+    logger.info("Chart saved to %s", plot_p_chart(changes, p_chart_path, theme))
 
     for group, df in metrics.groupby("constellation"):
         values = df["median_age_hours"].tolist()
@@ -269,6 +275,10 @@ if __name__ == "__main__":
             logger.warning("%s: only %d snapshots; limits are preliminary until %d",
                            group, len(values), MIN_BASELINE_POINTS)
 
+    logger.info("Chart saved to %s", plot_control_chart(metrics, freshness_path, theme))
+    return metrics, changes
+
+if __name__ == "__main__":
+    setup_logging()
     ANALYSIS_DIR.mkdir(parents=True, exist_ok=True)
-    chart_path = plot_control_chart(metrics, ANALYSIS_DIR / "spc_data_age.png")
-    logger.info("Chart saved to %s", chart_path)
+    run_spc(Path("demo") / "spc_altitude_change.png", ANALYSIS_DIR / "spc_data_age.png")

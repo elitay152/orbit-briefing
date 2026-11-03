@@ -134,3 +134,11 @@ def test_snapshot_metrics_age_is_measured_in_utc(valid_record, tmp_path, monkeyp
     assert row["constellation"] == "kuiper"
     assert row["satellites"] == 1
     assert row["median_age_hours"] == pytest.approx(3.76, abs=0.01)
+
+
+def test_laney_limits_handle_no_changes_at_all():
+    # a constellation where no satellite changed altitude must not crash the build
+    limits = laney_limits([0, 0, 0], [391, 391, 391])
+    assert limits["p_bar"] == 0
+    assert limits["ucl"] == [0, 0, 0]
+    assert not any(rate_signals(limits))

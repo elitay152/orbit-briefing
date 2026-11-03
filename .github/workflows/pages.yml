@@ -1,0 +1,59 @@
+name: dashboard
+
+on:
+  workflow_run:
+    workflows: [daily-snapshot]   # rebuild after each daily snapshot
+    types: [completed]
+  workflow_dispatch:               # "Run workflow" button for manual runs
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false        # let a deploy finish before the next one starts
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      LOCATION_NAME: Seattle
+      LAT: "47.6205"
+      LON: "-122.3493"
+      LAKE_DIR: ${{ github.workspace }}/lake-store/orbital_elements
+      MPLBACKEND: Agg
+    steps:
+      - uses: actions/checkout@v4          # code (main)
+        with:
+          ref: main
+
+      - uses: actions/checkout@v4          # data branch, into ./lake-store
+        with:
+          ref: data
+          path: lake-store
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+      - run: python -m orbit.site.build --out site
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
