@@ -69,3 +69,33 @@ def test_identical_records_give_zero_error(ts):
     assert errors[0]["error_km"] == pytest.approx(0, abs=1e-6)
     assert errors[0]["altitude_change_km"] == pytest.approx(0, abs=1e-6)
     assert errors[0]["age_days"] == 0
+
+# --- date ranges ---------------------------------------------------------------
+
+import pandas as pd
+
+from orbit.analysis.prediction_error import date_range_text, format_date_range
+
+
+def test_date_range_within_one_year():
+    start = pd.Timestamp("2026-10-28T14:00Z")
+    end = pd.Timestamp("2026-11-03T09:00Z")
+    assert format_date_range(start, end) == "Oct 28 – Nov 3, 2026"
+
+
+def test_date_range_across_years_shows_both_years():
+    start = pd.Timestamp("2026-12-30T00:00Z")
+    end = pd.Timestamp("2027-01-02T00:00Z")
+    assert format_date_range(start, end) == "Dec 30, 2026 – Jan 2, 2027"
+
+
+def test_date_range_text_spans_every_frame():
+    frames = {
+        "kuiper": pd.DataFrame({"epoch": ["2026-10-29T00:00Z", "2026-11-01T00:00Z"]}),
+        "starlink": pd.DataFrame({"epoch": ["2026-10-28T00:00Z", "2026-11-03T00:00Z"]}),
+    }
+    assert date_range_text(frames) == "Oct 28 – Nov 3, 2026"
+
+
+def test_date_range_text_is_empty_without_epochs():
+    assert date_range_text({"kuiper": pd.DataFrame({"age_days": [1.0]})}) == ""
