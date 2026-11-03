@@ -75,14 +75,16 @@ def draw_diagram(out_path: Path) -> Path:
 
     # outputs
     outputs = [
-        (6.05, "Spoken briefing", ["Satellites passing over", "a location, read aloud"]),
-        (4.45, "Prediction error", ["SGP4 error as data ages,", "altitude changes"]),
-        (2.85, "Control charts (SPC)", ["Altitude changes and", "data freshness"]),
-        (1.25, "AI analyst", ["Local LLM writes read-only", "SQL, with guardrails"]),
+        (6.3, "Spoken briefing", ["Satellites passing over", "a location, read aloud"]),
+        (4.8, "Prediction error", ["SGP4 error as data ages,", "altitude changes"]),
+        (3.3, "Control charts (SPC)", ["Altitude changes and", "data freshness"]),
+        (1.8, "AI analyst", ["Local LLM writes read-only", "SQL, with guardrails"]),
+        (0.3, "Dashboard", ["GitHub Pages, rebuilt", "after each snapshot"]),
     ]
+    box_h = 1.3
     for y, title, lines in outputs:
-        box(ax, 12.75, y, 2.95, 1.4, title, lines)
-        arrow(ax, (12.1, mid), (12.75, y + 0.7))
+        box(ax, 12.75, y, 2.95, box_h, title, lines)
+        arrow(ax, (12.1, mid), (12.75, y + box_h / 2))
 
     # footer: stack
     ax.text(0.45, 0.85, "Python  ·  DuckDB  ·  Parquet  ·  GitHub Actions  ·  skyfield / SGP4  ·  "
