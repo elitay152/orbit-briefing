@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import sys
+import time
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -31,18 +32,41 @@ def make_session(retry: Retry = RETRY) -> requests.Session:
     session.mount("http://", HTTPAdapter(max_retries=retry))
     return session
 
-def fetch_group(group: str, session: requests.Session, url: str = CELESTRAK_URL) -> list[dict]:
+# the session's Retry only covers failed connections and 5xx statuses; a download that
+# starts fine but gets cut off partway (seen with the ~7 MB Starlink file) needs a fresh request
+DOWNLOAD_ATTEMPTS = 3
+INCOMPLETE_DOWNLOAD = (
+    requests.exceptions.ChunkedEncodingError,   # connection dropped mid-body
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+    requests.exceptions.JSONDecodeError,        # body ended early, so the JSON is unterminated
+)
+
+def fetch_group(group: str, session: requests.Session, url: str = CELESTRAK_URL,
+                attempts: int = DOWNLOAD_ATTEMPTS, wait=time.sleep) -> list[dict]:
     """
-    Fetches the group data from the API, retrying transient server errors.
+    Fetches the group data from the API, retrying transient server errors
+    and downloads that get cut off partway.
 
     Args:
         group (str): The name of the group to fetch.
         session (requests.Session): Session from make_session(), so retries apply.
         url (str): The CelesTrak GP endpoint.
+        attempts (int): How many times to try a download that arrives incomplete.
+        wait: Called with the seconds to pause between attempts (swapped out in tests).
     """
-    response = session.get(url, params={"GROUP": group, "FORMAT": "json"}, timeout=30)
-    response.raise_for_status()  # Raise an error for bad responses
-    return response.json()  # Assuming the API returns JSON data
+    for attempt in range(1, attempts + 1):
+        try:
+            response = session.get(url, params={"GROUP": group, "FORMAT": "json"}, timeout=30)
+            response.raise_for_status()  # 4xx, or 5xx once the session's retries run out
+            return response.json()
+        except INCOMPLETE_DOWNLOAD as e:
+            if attempt == attempts:
+                raise
+            pause = 10 * attempt
+            logger.warning("%s: download incomplete (%s); retrying in %ds (attempt %d of %d)",
+                           group, e, pause, attempt + 1, attempts)
+            wait(pause)
 
 def save_raw(group:str, records:list[dict]) -> Path:
     """

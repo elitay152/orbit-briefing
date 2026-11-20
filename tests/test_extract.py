@@ -94,3 +94,46 @@ def test_one_group_failing_does_not_stop_the_others(tmp_path, monkeypatch):
     assert len(list((tmp_path / "kuiper").glob("*.json"))) == 1
     assert len(list((tmp_path / "other").glob("*.json"))) == 1
     assert not (tmp_path / "starlink").exists()
+
+
+def serve_truncated(truncated_responses: int):
+    """Local server whose first responses stop halfway through the JSON, like today's Starlink download."""
+    calls = {"n": 0}
+    body = json.dumps([{"OBJECT_NAME": "TEST-1"}, {"OBJECT_NAME": "TEST-2"}]).encode()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            calls["n"] += 1
+            payload = body[: len(body) // 2] if calls["n"] <= truncated_responses else body
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()            # no Content-Length: the server just closes when done
+            self.wfile.write(payload)
+            self.close_connection = True
+
+        def log_message(self, *args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return f"http://127.0.0.1:{server.server_port}/gp.php", calls, server
+
+
+def test_cut_off_download_is_fetched_again(fast_session):
+    url, calls, server = serve_truncated(1)
+    try:
+        records = extract.fetch_group("starlink", fast_session, url=url, wait=lambda s: None)
+    finally:
+        server.shutdown()
+    assert len(records) == 2
+    assert calls["n"] == 2
+
+
+def test_download_that_keeps_getting_cut_off_fails_after_every_attempt(fast_session):
+    url, calls, server = serve_truncated(99)
+    try:
+        with pytest.raises(requests.RequestException):
+            extract.fetch_group("starlink", fast_session, url=url, wait=lambda s: None)
+    finally:
+        server.shutdown()
+    assert calls["n"] == extract.DOWNLOAD_ATTEMPTS
